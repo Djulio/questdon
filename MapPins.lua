@@ -461,7 +461,8 @@ function ns.QuestPinHint(pin)
   if pin and not offers and pin.group then
     for _, m in ipairs(pin.group) do if m.kind ~= "turnin" then offers = true break end end
   end
-  local hint = (offers and ns.ReportPin) and L["Click: arrow, Alt-click: hide"] or L["Click: arrow"]
+  -- (07.11.2026, Daniel: Alt-click in the tooltip, clearer) says what Alt-click is for
+  local hint = (offers and ns.ReportPin) and L["Click: arrow, Alt-click: no quest here, hide"] or L["Click: arrow"]
   if offers and not Details() then hint = hint .. ", " .. L["Shift: details"] end
   return hint
 end
@@ -956,6 +957,9 @@ local lastSig, precomputed
 -- zoom step) the display list of each zoom step, kept while the pins stay the same (same map, same signature, same options):
 -- zooming back to a step seen before draws it from here instead of grouping all spots again. At most ZOOM_KEEP steps.
 local zoomCache, zoomCacheSig, zoomCacheN = {}, nil, 0
+-- (07.11.2026, Daniel: "auch bei der Weltkarte, werden die Flächen nach abschalten der funktion nicht ausgeblendet") the
+-- display options of the last build: a changed option (areas, symbols, sizes) builds anew, even with the same pins
+local lastZKey
 local ZOOM_KEEP = 4
 local function ZoomKey(clusterB, objB)
   return ("%s|%s|%s|%s|%s|%s|%s|%s"):format(clusterB, objB, ns.SymbolsOn() and 1 or 0, tostring(ns.db.thinObjectives),
@@ -1434,6 +1438,7 @@ function Setup()
     if ns.OpenMapEntrances() ~= lastOpenMap then return false end -- (06.11.2026) OpenMap's stitched map came or went
     local scale, canvas = Scales(map)
     if ns.ClusterBucket(scale) ~= clusterBucket or ns.ClusterBucket(canvas) ~= objBucket then return false end
+    if ZoomKey(clusterBucket, objBucket) ~= lastZKey then return false end
     curSig = ns.PinsSignature(mapID, pins)
     return curSig == lastSig
   end)
@@ -1454,6 +1459,7 @@ function Setup()
     local display, areas
     sig = sig or ns.PinsSignature(mapID, pins)
     local zkey = ZoomKey(clusterBucket, objBucket)
+    lastZKey = zkey
     if zoomCacheSig ~= mapID .. "#" .. tostring(sig) then zoomCache, zoomCacheSig, zoomCacheN = {}, mapID .. "#" .. tostring(sig), 0 end
     local cached = zoomCache[zkey]
     if cached then
@@ -1601,7 +1607,7 @@ local function RefreshIfChanged()
     if ns.HarvestQuestLines then ns.HarvestQuestLines(mapID) end
     local pins = ns.PinsForMap(mapID)
     local sig = ns.PinsSignature(mapID, pins)
-    if lastSig and sig == lastSig then stats.skipped = stats.skipped + 1 return end
+    if lastSig and sig == lastSig and ZoomKey(clusterBucket, objBucket) == lastZKey then stats.skipped = stats.skipped + 1 return end
     precomputed = { mapID = mapID, pins = pins, sig = sig }
   end
   provider:RefreshAllData()

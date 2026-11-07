@@ -64,6 +64,8 @@ local PAGES = {
     -- (1.3.5) dungeon entrances
     { header = "Dungeon entrances" },
     { key = "dungeonPins", name = "Dungeon entrances on the map", tip = "The entrance of every dungeon and raid Questdon knows, on the world map. Mouse over: level range and your quests there. Click: the dungeon in the quest book. Right-click: the arrow leads you there.", onChange = RefreshPins },
+    -- (07.11.2026, Discord tP: too many marks on the minimap) the minimap's own "tracked only"; the world map stays
+    { key = "minimapTrackedOnly", name = "Only tracked quests on the minimap", tip = "Quest mobs and objectives on the minimap only for the quest picked in the quest list and the quests watched in the quest log. The world map keeps its own setting. The ! of quests to pick up stay.", parent = "minimapPins", onChange = RefreshPins },
     { key = "dungeonPinsMinimap", name = "Dungeon entrances on the minimap", tip = "The same entrances on the minimap, but only when you are within about 300 yards, so the edge of the minimap stays clear.", parent = "minimapPins", onChange = RefreshPins },
     -- (30.10.2026, Daniel 27.10.) inns, auction houses, flight masters and banks
     { header = "Towns" },

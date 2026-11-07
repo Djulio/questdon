@@ -543,7 +543,7 @@ local function MinimapPins(mapID, moved)
   end
   local pins = {}
   for i, p in ipairs(base) do pins[i] = p end
-  for _, o in ipairs(ns.ObjectivePointsNear(mapID, pc, pn, pw, radius * NEAR_REACH)) do
+  for _, o in ipairs(ns.ObjectivePointsNear(mapID, pc, pn, pw, radius * NEAR_REACH, ns.db.minimapTrackedOnly)) do
     o.kind = "objective"
     pins[#pins + 1] = o
   end
@@ -854,4 +854,9 @@ ns.On("QUESTLINE_UPDATE", QueueFresh)
 ns.On("BAG_UPDATE_DELAYED", Queue) -- the base pins (quests to take, turn-ins, entrances) do not read the bags
 ns.On("PLAYER_LEVEL_UP", QueueFresh)
 for _, e in ipairs({ "QUEST_ACCEPTED", "QUEST_REMOVED", "QUEST_TURNED_IN" }) do ns.On(e, ForgetBase) end
+-- (07.11.2026) "minimapTrackedOnly": another quest tracked changes the minimap's dots (MapPins.lua refreshes all pins
+-- only when the map's own "Only for tracked quests" is on)
+for _, e in ipairs({ "SUPER_TRACKING_CHANGED", "QUEST_WATCH_LIST_CHANGED" }) do
+  ns.On(e, function() if ns.db and ns.db.minimapTrackedOnly and not ns.db.objectivePinsTrackedOnly then Queue() end end)
+end
 ns.On("ZONE_CHANGED_NEW_AREA", function() curMap = nil end)

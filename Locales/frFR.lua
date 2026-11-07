@@ -139,7 +139,7 @@ L["Choice: %s"] = "Au choix : %s"
 L["Choose one"] = "Au choix"
 L["Click: point the arrow here"] = "Clic : y diriger la flèche"
 -- (1.3.4) compact quest tooltips
-L["Click: arrow, Alt-click: hide"] = "Clic : flèche, Alt-clic : masquer"
+L["Click: arrow, Alt-click: no quest here, hide"] = "Clic : flèche, Alt-clic : pas de quête ici, masquer"
 L["Click: arrow"] = "Clic : flèche"
 L["Shift: details"] = "Maj : détails"
 L["Not confirmed yet"] = "Pas encore confirmée"
@@ -428,6 +428,7 @@ L["Sends what you learned and the data does not have yet (only numbers: quest, N
 
 -- (1.1) quests a quest giver never offers (NotHere.lua)
 L["%s is hidden: the quest giver did not offer it at %d different levels. Undo: /qd nothere undo"] = "Quête masquée : %s (le donneur de quête ne l’a pas proposée à %d niveaux différents). Annuler : /qd nothere undo"
+L["%s is hidden: the quest giver did not offer it. Undo: /qd nothere undo"] = "Quête masquée : %s (le donneur de quête ne l’a pas proposée). Annuler : /qd nothere undo"
 L["Reported as not offered here, now hidden: %s. Undo: /qd nothere undo"] = "Signalée(s) comme non proposée(s) ici et désormais masquée(s) : %s. Annuler : /qd nothere undo"
 L["Shown again: %d quests."] = "De nouveau affichées : %d quête(s)."
 L["Nothing to undo."] = "Rien à annuler."
@@ -633,6 +634,8 @@ L["Dungeon entrances on the map"] = "Entrées des donjons sur la carte"
 L["The entrance of every dungeon and raid Questdon knows, on the world map. Mouse over: level range and your quests there. Click: the dungeon in the quest book. Right-click: the arrow leads you there."] = "L’entrée de chaque donjon et raid connu de Questdon, sur la carte du monde. Au survol : tranche de niveaux et vos quêtes là-bas. Clic : le donjon dans le carnet de quêtes. Clic droit : la flèche vous y mène."
 L["Dungeon entrances on the minimap"] = "Entrées des donjons sur la minicarte"
 L["The same entrances on the minimap, but only when you are within about 300 yards, so the edge of the minimap stays clear."] = "Les mêmes entrées sur la minicarte, mais seulement à moins de 300 m environ, pour que le bord de la minicarte reste dégagé."
+L["Only tracked quests on the minimap"] = "Seulement les quêtes suivies sur la minicarte"
+L["Quest mobs and objectives on the minimap only for the quest picked in the quest list and the quests watched in the quest log. The world map keeps its own setting. The ! of quests to pick up stay."] = "Monstres et objectifs de quête sur la minicarte seulement pour la quête choisie dans la liste de quêtes et les quêtes suivies dans le journal des quêtes. La carte du monde garde son propre réglage. Les ! des quêtes à prendre restent."
 -- (1.3.5) show the entrance on the map
 L["Show on map"] = "Voir sur la carte"
 L["Opens the world map at the entrance and lets its pin pulse for a moment."] = "Ouvre la carte du monde sur l’entrée et fait clignoter son marqueur un instant."

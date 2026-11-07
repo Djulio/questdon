@@ -37,6 +37,7 @@ local COMPASS = 58
 local panel, card
 local rows = {}        -- needle rows of the last build: { row = , target = }
 local lastSig
+local screenCap -- (07.11.2026) how many quests fit above the screen's bottom edge, see Limit()
 local grip
 local MIN_W, MAX_W, ROW, MAX_LINES = 240, 600, 30, 30
 local function TrackerWidth() return math.max(MIN_W, math.min(MAX_W, tonumber((ns.db or {}).trackerWidth) or 300)) end
@@ -654,7 +655,12 @@ ns.QuestTextFrame = function() return reader end -- (tests)
 local KEYS = { pos = "trackerPos", collapsed = "trackerCollapsed", scale = "trackerScale", alpha = "trackerAlpha",
   combatFade = "trackerCombatFade", shown = "trackerShown", locked = "trackerLocked" }
 local function Get(key) local k = KEYS[key] return k and DB()[k] end
-local function Set(key, value) local k = KEYS[key] if k and ns.db then ns.db[k] = value end end
+local function Set(key, value)
+  local k = KEYS[key]
+  if k and ns.db then ns.db[k] = value end
+  -- (07.11.2026) moved or scaled: the room to the screen's edge is measured again
+  if (key == "pos" or key == "scale") and screenCap then screenCap = nil lastSig = nil ns.QueueRefresh("tracker") end
+end
 
 -- (02.11.2026, Daniel: "eindeutige symbole für questbuch und questanzeigen") two plain symbols of the game, in both
 -- clients, in the gold of the other head buttons: a scroll for the quest's whole text, a book for the quest book
@@ -794,6 +800,35 @@ end
 ns.TrackerQuestMenu = ShowQuestMenu -- (tests)
 
 local scrollSkip, scrollMode, scrollMore = 0, nil, 0 -- (20.10.) quests scrolled off the top, the mode they belong to, quests below
+-- (07.11.2026, Daniel: "liste so lang, dass ich unten keinen reiter mehr zum verschieben habe ... da müssen wir ein max
+-- einbauen") the list never runs past the screen: when the window's bottom (with its size handle) would leave the
+-- screen, fewer quests show (the rest under "+n more", the wheel scrolls). Not saved; it only ever shrinks while the
+-- window stays put (dragging the handle down stops there, no flicker), moving or scaling the window measures again.
+local SCREEN_MARGIN = 4
+local function Limit()
+  local lines = tonumber(ns.db.trackerLines)
+  if screenCap and (not lines or screenCap < lines) then return screenCap end
+  return lines
+end
+ns.TrackerScreenCap = function() return screenCap end -- (tests, /qd diag)
+-- after the layout: past the screen's edge, fewer quests (estimated from the rows just laid out, then measured again)
+local function CapToScreen(shown)
+  -- the height just set (SetHeight) counts at once; GetBottom could still be the last frame's
+  local top, h = ns.Num(ns.Value(panel.GetTop, panel)), ns.Num(ns.Value(panel.GetHeight, panel))
+  local bottom = top and h and top - h
+  if bottom and shown > 1 and not (panel.IsCollapsed and panel:IsCollapsed()) then
+    local ps = ns.Num(ns.Value(panel.GetEffectiveScale, panel)) or 1
+    local us = ns.Num(UIParent.GetEffectiveScale and UIParent:GetEffectiveScale()) or 1
+    local screenTop = (ns.Num(ns.Value(UIParent.GetTop, UIParent)) or 768) * us / ps
+    local over = math.max(SCREEN_MARGIN - bottom, top - screenTop)
+    if over > 0 then
+      local per = math.max(ROW, (top - bottom) / (shown + 2)) -- rough height of one quest with its lines
+      screenCap = math.max(1, shown - math.max(1, math.ceil(over / per)))
+      lastSig = nil
+      ns.QueueRefresh("tracker")
+    end
+  end
+end
 -- (18.10., Daniel: "very tight between the quests") pixels above every quest row; (02.11.2026) 0: Don rows are 34 px with
 -- a fine line below, the room is in the row now
 local QUEST_GAP = 0
@@ -1207,7 +1242,7 @@ local function Build()
   for _, e in ipairs(list) do if e.questID == focusID then focus = e end end
   -- rebuild only when something we show changed (distances in steps of 10 yards)
   sigN, progSigN = 0, 0
-  Put(Mode()) Put(ns.db.trackerSortLevel) Put(focusID) Put(ns.GuideActive()) Put(ns.db.trackerLines) Put(scrollSkip) Put(panel._width)
+  Put(Mode()) Put(ns.db.trackerSortLevel) Put(focusID) Put(ns.GuideActive()) Put(Limit()) Put(scrollSkip) Put(panel._width)
   Put(ns.db.trackerGreyOpen) Put(ns.db.trackerHideGrey) Put(ns.db.trackerHiddenOpen) Put(ns.db.xpBar)
   ExtrasSig()
   local hid = Hidden()
@@ -1257,15 +1292,15 @@ local function Build()
   panel:ClearRows()
   local width = (panel._width or 300) - 16
   -- (Daniel 12.10.: make the window bigger or smaller) how many quests the list shows (the handle, down and up)
-  local left = tonumber(ns.db.trackerLines) or math.huge
+  local left = Limit() or math.huge
   local more = 0
   -- (20.10., Daniel) the mouse wheel on the list scrolls it: the first quests are skipped (not counted as "more")
   local modeKey = Mode() .. (ns.db.trackerSortLevel and "L" or "")
   if scrollMode ~= modeKey then scrollMode, scrollSkip = modeKey, 0 end
-  local skip, skipped = scrollSkip, 0
+  local skip, skipped, shown = scrollSkip, 0, 0
   local function Take()
     if skip > 0 then skip, skipped = skip - 1, skipped + 1 return false end
-    if left > 0 then left = left - 1 return true end
+    if left > 0 then left, shown = left - 1, shown + 1 return true end
     more = more + 1
     return false
   end
@@ -1451,7 +1486,7 @@ local function Build()
     HiddenLine()
   end
   do -- the list got shorter: scroll back
-    local lines = tonumber(ns.db.trackerLines)
+    local lines = Limit()
     local total = skipped + ((lines or math.huge) - left) + more
     if lines and scrollSkip > math.max(0, total - lines) then
       scrollSkip = math.max(0, total - lines)
@@ -1461,6 +1496,7 @@ local function Build()
   Extras()
   Footer()
   panel:Relayout()
+  CapToScreen(shown)
 end
 
 -- the small needles of the rows (5 times a second, no rebuild)
@@ -1660,7 +1696,7 @@ function ns.TrackerAttachGrip()
     -- (05.11.2026, Daniel: "nach dem neu einloggen liste voll aufgeklappt") a list without a saved size shows all its
     -- quests: the handle starts from all of them. It started from 0 before (math.huge - math.huge), so the first drag,
     -- even one only in width, cut the list to 1 quest.
-    self._drag = { x = x, y = y, w = panel._width or TrackerWidth(), lines = tonumber(ns.db.trackerLines) or total, total = total }
+    self._drag = { x = x, y = y, w = panel._width or TrackerWidth(), lines = Limit() or total, total = total }
     self:SetScript("OnUpdate", function()
       local d = self._drag
       if not d then return end

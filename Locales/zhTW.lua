@@ -139,7 +139,7 @@ L["Choice: %s"] = "可選擇：%s"
 L["Choose one"] = "選擇一項"
 L["Click: point the arrow here"] = "點擊：讓箭頭指向此處"
 -- (1.3.4) compact quest tooltips
-L["Click: arrow, Alt-click: hide"] = "點擊：箭頭，Alt-點擊：隱藏"
+L["Click: arrow, Alt-click: no quest here, hide"] = "點擊：箭頭，Alt-點擊：這裡沒有任務，隱藏"
 L["Click: arrow"] = "點擊：箭頭"
 L["Shift: details"] = "Shift：詳細資訊"
 L["Not confirmed yet"] = "尚未確認"
@@ -428,6 +428,7 @@ L["Sends what you learned and the data does not have yet (only numbers: quest, N
 
 -- (1.1) quests a quest giver never offers (NotHere.lua)
 L["%s is hidden: the quest giver did not offer it at %d different levels. Undo: /qd nothere undo"] = "「%s」已隱藏：任務給予者在%d個不同等級時都沒有提供此任務。復原：/qd nothere undo"
+L["%s is hidden: the quest giver did not offer it. Undo: /qd nothere undo"] = "「%s」已隱藏：任務給予者沒有提供。復原：/qd nothere undo"
 L["Reported as not offered here, now hidden: %s. Undo: /qd nothere undo"] = "已回報為此處未提供並隱藏：%s。復原：/qd nothere undo"
 L["Shown again: %d quests."] = "已重新顯示%d個任務。"
 L["Nothing to undo."] = "沒有可復原的項目。"
@@ -633,6 +634,8 @@ L["Dungeon entrances on the map"] = "在地圖上顯示地城入口"
 L["The entrance of every dungeon and raid Questdon knows, on the world map. Mouse over: level range and your quests there. Click: the dungeon in the quest book. Right-click: the arrow leads you there."] = "在世界地圖上顯示 Questdon 已知的每個地城與團隊副本入口。滑鼠指向：等級範圍與你在那裡的任務。點擊：任務手冊中的地城。右鍵：箭頭帶你前往。"
 L["Dungeon entrances on the minimap"] = "在小地圖上顯示地城入口"
 L["The same entrances on the minimap, but only when you are within about 300 yards, so the edge of the minimap stays clear."] = "在小地圖上顯示相同的入口，但只在你距離約300碼以內時顯示，讓小地圖邊緣保持清爽。"
+L["Only tracked quests on the minimap"] = "小地圖上只顯示追蹤中的任務"
+L["Quest mobs and objectives on the minimap only for the quest picked in the quest list and the quests watched in the quest log. The world map keeps its own setting. The ! of quests to pick up stay."] = "小地圖上的任務怪物與目標只為任務清單中選定的任務與任務日誌中追蹤的任務顯示。世界地圖保留自己的設定。可接任務的 ! 仍會顯示。"
 -- (1.3.5) show the entrance on the map
 L["Show on map"] = "在地圖上顯示"
 L["Opens the world map at the entrance and lets its pin pulse for a moment."] = "開啟入口所在的世界地圖，並讓入口標記短暫閃爍。"

@@ -41,6 +41,9 @@ local L = ns.L
 --                                                      herb, mining, skinning, fishing; node or pool
 --                                                      object, skinned creature, or - 0 (open water);
 --                                                      n = loot windows with that item there
+--   Z <questID> <level>                                (07.11.2026) the level the game shows for the quest
+--                                                      (quest log or the server, DonData Engine/Levels.lua);
+--                                                      "new": only where it differs from the shipped level
 --   M <npcID> <name>                                   (1.3.5) an NPC's name as the
 --                                                      game showed it, in the locale
 --                                                      of the header (rest of the line)
@@ -247,6 +250,7 @@ local KEYS = {
   end,
   E = function(l) local i, m = l:match("^E (%d+) (%d+) ") if i then return ("E %s %s"):format(i, m) end end,
   V = function(l) local n, r, m = l:match("^V (%d+) (%S+) (%d+) ") if n then return ("V %s %s %s"):format(n, r, m) end end,
+  Z = function(l) local q, lv = l:match("^Z (%d+) (%d+)$") if q then return ("Z %s %s"):format(q, lv) end end,
 }
 function ns.KnownKeys(line)
   local f = type(line) == "string" and KEYS[line:sub(1, 1)]
@@ -275,6 +279,10 @@ local function ShippedLine(line)
     local r = q and ns.LEARNED_REWARDS and ns.LEARNED_REWARDS[tonumber(q)]
     local byClass = type(r) == "table" and r[tonumber(cl)]
     return type(byClass) == "table" and byClass[tonumber(item)] ~= nil
+  elseif c == "Z" then
+    -- (07.11.2026) the shipped level (ns.GAME_LEVELS) is the same
+    local q, lv = line:match("^Z (%d+) (%d+)$")
+    return q ~= nil and ns.GAME_LEVELS ~= nil and ns.GAME_LEVELS[tonumber(q)] == tonumber(lv)
   end
   return false
 end
@@ -446,6 +454,12 @@ function ns.ExportRecords(all)
   for q, v in pairs(orders) do if Int(q) and q > 0 and type(v) == "string" and v:match("^%d+[,%d]*$") then orderKeys[#orderKeys + 1] = q end end
   table.sort(orderKeys)
   for _, q in ipairs(orderKeys) do records[#records + 1] = ("Y %d %s"):format(q, orders[q]) end
+  -- (07.11.2026) the levels the game showed (quest log, server: DonData Engine/Levels.lua): "Z quest level"
+  local levels = type(ns.db.questLevels) == "table" and ns.db.questLevels or {}
+  for _, q in ipairs(SortedKeys(levels)) do
+    local lv = levels[q]
+    if Int(lv) and lv > 0 and lv <= 100 then records[#records + 1] = ("Z %d %d"):format(q, lv) end
+  end
   -- (27.10.) where herbs, ore, leather and fish came from (Gather.lua): "H kind source id map x y item count"
   for _, line in ipairs(ns.GatherRecords and ns.GatherRecords() or {}) do records[#records + 1] = line end
   -- (1.3.8) the reward each of your characters picked by hand: "R quest class tree item" (Rewards.lua)

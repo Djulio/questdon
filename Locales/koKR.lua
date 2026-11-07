@@ -139,7 +139,7 @@ L["Choice: %s"] = "선택 보상: %s"
 L["Choose one"] = "하나 선택"
 L["Click: point the arrow here"] = "클릭: 화살표로 이곳 가리키기"
 -- (1.3.4) compact quest tooltips
-L["Click: arrow, Alt-click: hide"] = "클릭: 화살표, Alt-클릭: 숨기기"
+L["Click: arrow, Alt-click: no quest here, hide"] = "클릭: 화살표, Alt-클릭: 여기에 퀘스트 없음, 숨기기"
 L["Click: arrow"] = "클릭: 화살표"
 L["Shift: details"] = "Shift: 자세히"
 L["Not confirmed yet"] = "아직 확인되지 않음"
@@ -428,6 +428,7 @@ L["Sends what you learned and the data does not have yet (only numbers: quest, N
 
 -- (1.1) quests a quest giver never offers (NotHere.lua)
 L["%s is hidden: the quest giver did not offer it at %d different levels. Undo: /qd nothere undo"] = "숨긴 퀘스트: %s. 퀘스트 NPC가 서로 다른 %d개 레벨에서 이 퀘스트를 제공하지 않았습니다. 되돌리기: /qd nothere undo"
+L["%s is hidden: the quest giver did not offer it. Undo: /qd nothere undo"] = "숨긴 퀘스트: %s. 퀘스트 NPC가 제공하지 않았습니다. 되돌리기: /qd nothere undo"
 L["Reported as not offered here, now hidden: %s. Undo: /qd nothere undo"] = "이곳에서 제공되지 않는다고 보고하여 숨겼습니다: %s. 되돌리기: /qd nothere undo"
 L["Shown again: %d quests."] = "퀘스트 %d개를 다시 표시합니다."
 L["Nothing to undo."] = "되돌릴 내용이 없습니다."
@@ -633,6 +634,8 @@ L["Dungeon entrances on the map"] = "지도에 던전 입구 표시"
 L["The entrance of every dungeon and raid Questdon knows, on the world map. Mouse over: level range and your quests there. Click: the dungeon in the quest book. Right-click: the arrow leads you there."] = "Questdon이 아는 모든 던전과 공격대의 입구를 세계 지도에 표시합니다. 마우스를 올리면 레벨 범위와 그곳의 내 퀘스트를 보여 줍니다. 클릭: 퀘스트 수첩의 던전. 오른쪽 클릭: 화살표가 그곳으로 안내합니다."
 L["Dungeon entrances on the minimap"] = "미니맵에 던전 입구 표시"
 L["The same entrances on the minimap, but only when you are within about 300 yards, so the edge of the minimap stays clear."] = "같은 입구를 미니맵에도 표시하지만, 약 300미터 이내에 있을 때만 표시해 미니맵 가장자리가 어지럽지 않게 합니다."
+L["Only tracked quests on the minimap"] = "미니맵에는 추적 중인 퀘스트만"
+L["Quest mobs and objectives on the minimap only for the quest picked in the quest list and the quests watched in the quest log. The world map keeps its own setting. The ! of quests to pick up stay."] = "미니맵의 퀘스트 몬스터와 목표를 퀘스트 목록에서 고른 퀘스트와 퀘스트 일지에서 추적 중인 퀘스트만 표시합니다. 세계 지도는 자체 설정을 따릅니다. 받을 수 있는 퀘스트의 !는 그대로 표시됩니다."
 -- (1.3.5) show the entrance on the map
 L["Show on map"] = "지도에서 보기"
 L["Opens the world map at the entrance and lets its pin pulse for a moment."] = "입구가 있는 세계 지도를 열고 입구 표시를 잠시 깜박이게 합니다."

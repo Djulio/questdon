@@ -285,7 +285,8 @@ function ns.BuildDiag()
     end
     return ("tracker %s, shown %s, compass %s, hide Blizzard's %s, lines %s, docked %s, guide %s, Blizzard's hidden %s; %s"):format(
       tostring(db.tracker), tostring(db.trackerShown), tostring(db.trackerCompass), tostring(db.trackerHideBlizz),
-      tostring(db.trackerLines), tostring(ns.TrackerDocked and ns.TrackerDocked()), tostring(ns.GuideActive and ns.GuideActive()),
+      tostring(db.trackerLines) .. (ns.TrackerScreenCap and ns.TrackerScreenCap() and (" (screen " .. ns.TrackerScreenCap() .. ")") or ""),
+      tostring(ns.TrackerDocked and ns.TrackerDocked()), tostring(ns.GuideActive and ns.GuideActive()),
       tostring(ns.BlizzTrackerHidden and ns.BlizzTrackerHidden()), where)
   end)
   Probe(out, "Questie", function()
@@ -311,6 +312,13 @@ function ns.BuildDiag()
     end
     return ("confirmed %d, nonexistent %d (zzOLD %d), pending %d, no answer %d, recheck %d, build %s"):format(
       c.confirmed, c.missing, old, c.pending, c.noAnswer, c.recheck, tostring(ns.db.questExistsBuild or "?"))
+  end)
+  Probe(out, "quest levels", function()
+    -- (07.11.2026) the server's quest levels, asked bit by bit (DonData Engine/Levels.lua)
+    if not ns.LevelScanStatus then return "DonData without the level walk" end
+    local c = ns.LevelScanStatus()
+    return ("%s at quest %d, this session asked %d, new %d, same %d, none %d; kept %d"):format(
+      c.done and "through" or c.running and "walking" or "waiting", c.at, c.asked, c.found, c.same, c.none, c.kept)
   end)
   Probe(out, "learned", function()
     local spots = 0

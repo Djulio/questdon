@@ -13,8 +13,8 @@ local L = ns.L
 --
 --   message  "D2:<seq>:<account token>:<line>;<line>;..."  (at most MAX_MSG
 --            characters; "D1:<seq>:..." from Questdon before 1.1 is still read)
---   lines    S G I T O F K D A X N E W R P H as in Export.lua, only numbers (E: 1.3.6 dungeon entrances, W: 1.3.6 walked
---            cells, R: 1.3.8 reward picks); (1.3.9) Q L J B: play times, drop rates, flights, abandons (Timing.lua),
+--   lines    S G I T O F K D A X N E W R P H Z as in Export.lua, only numbers (E: 1.3.6 dungeon entrances, W: 1.3.6 walked
+--            cells, R: 1.3.8 reward picks, Z: 07.11.2026 quest levels); (1.3.9) Q L J B: play times, drop rates, flights, abandons (Timing.lua),
 --            measurements, not facts: kept line by line (ns.StoreSample), each own line sent SAMPLE_SENDS times,
 --            at most SAMPLES_PER_HOUR an hour, before the facts (their budget is the same)
 --
@@ -253,6 +253,12 @@ local PARSE = {
     if not (Int(q, 1e6) and Int(lv, 100) and tonumber(lv) >= 1) then return nil end
     return "A " .. q, nov or { v = lv }
   end,
+  -- (07.11.2026) the level the game shows for a quest (quest log or server, DonData Engine/Levels.lua)
+  Z = function(l, nov)
+    local q, lv = l:match("^Z (%d+) (%d+)$")
+    if not (Int(q, 1e6) and Int(lv, 101) and tonumber(lv) >= 1) then return nil end
+    return "Z " .. q, nov or { v = lv }
+  end,
   X = function(l, nov)
     local q = l:match("^X (%d+)$")
     if not Int(q, 1e6) then return nil end
@@ -437,7 +443,8 @@ end
 -- Make room: facts with fewer reporters go first, then (A5) quests this character's faction can never do, then the
 -- oldest (by day). (A5) No sort of all facts: they are counted per rank, the ranks (a few hundred) sorted, and one more
 -- pass removes everything below the cut (and part of the cut's rank).
-local QUEST_KEYS = { S = true, G = true, T = true, I = true, O = true, F = true, K = true, A = true, X = true, N = true, R = true }
+local QUEST_KEYS = { S = true, G = true, T = true, I = true, O = true, F = true, K = true, A = true, X = true, N = true, R = true,
+  Z = true }
 local function Rank(key, e, reach)
   local best, t = 0, 0
   if type(e) == "string" then

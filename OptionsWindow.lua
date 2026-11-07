@@ -28,7 +28,7 @@ local TABS = {
     -- down to 52, the hidden ones from 54 to 29; what we decide as developers is in ns.FIXED_OPTIONS (Options.lua)
     main = { "availablePins", "objectivePins", "objectiveIcons", "learnPins", "minimapPins", "dungeonPins", "servicePins" },
     more = { "showLowLevel", "lowLevelRange", "objectivePinsTrackedOnly", "objectiveAreas", "hideGamePOIs", "walkLines",
-      "nameplateIcons", "dungeonPinsMinimap", "mapPinScale", "minimapPinScale", "minimapButton" } },
+      "nameplateIcons", "minimapTrackedOnly", "dungeonPinsMinimap", "mapPinScale", "minimapPinScale", "minimapButton" } },
   { key = "list", title = "Quest list and arrow", pic = "opt_list",
     text = "Your quests in Questdon's list with a compass, and the arrow that leads you to the next objective.",
     -- (25.10., Daniel: "you cannot tell at first sight which option is for the list and which for the arrow") headers

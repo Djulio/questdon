@@ -139,7 +139,7 @@ L["Choice: %s"] = "На выбор: %s"
 L["Choose one"] = "На выбор"
 L["Click: point the arrow here"] = "Щелчок: направить стрелку сюда"
 -- (1.3.4) compact quest tooltips
-L["Click: arrow, Alt-click: hide"] = "Щелчок: стрелка, Alt-щелчок: скрыть"
+L["Click: arrow, Alt-click: no quest here, hide"] = "Щелчок: стрелка, Alt-щелчок: здесь нет задания, скрыть"
 L["Click: arrow"] = "Щелчок: стрелка"
 L["Shift: details"] = "Shift: подробности"
 L["Not confirmed yet"] = "Ещё не подтверждено"
@@ -428,6 +428,7 @@ L["Sends what you learned and the data does not have yet (only numbers: quest, N
 
 -- (1.1) quests a quest giver never offers (NotHere.lua)
 L["%s is hidden: the quest giver did not offer it at %d different levels. Undo: /qd nothere undo"] = "Скрыто задание %s: NPC не предложил его на %d разных уровнях. Вернуть: /qd nothere undo"
+L["%s is hidden: the quest giver did not offer it. Undo: /qd nothere undo"] = "Скрыто задание %s: NPC его не предложил. Отменить: /qd nothere undo"
 L["Reported as not offered here, now hidden: %s. Undo: /qd nothere undo"] = "Отмечено, что здесь задание не предлагается, и оно скрыто: %s. Вернуть: /qd nothere undo"
 L["Shown again: %d quests."] = "Снова показано заданий: %d."
 L["Nothing to undo."] = "Нечего возвращать."
@@ -633,6 +634,8 @@ L["Dungeon entrances on the map"] = "Входы в подземелья на к�
 L["The entrance of every dungeon and raid Questdon knows, on the world map. Mouse over: level range and your quests there. Click: the dungeon in the quest book. Right-click: the arrow leads you there."] = "Вход в каждое подземелье и рейд, известные Questdon, на карте мира. При наведении: диапазон уровней и ваши задания там. Щелчок: подземелье в книге заданий. Правый щелчок: стрелка ведет туда."
 L["Dungeon entrances on the minimap"] = "Входы в подземелья на мини-карте"
 L["The same entrances on the minimap, but only when you are within about 300 yards, so the edge of the minimap stays clear."] = "Те же входы на мини-карте, но только когда вы не дальше примерно 300 м, чтобы край мини-карты оставался свободным."
+L["Only tracked quests on the minimap"] = "На мини-карте только отслеживаемые задания"
+L["Quest mobs and objectives on the minimap only for the quest picked in the quest list and the quests watched in the quest log. The world map keeps its own setting. The ! of quests to pick up stay."] = "Противники и цели заданий на мини-карте только для задания, выбранного в списке заданий, и заданий, отслеживаемых в журнале. Карта мира сохраняет свою настройку. Знаки ! доступных заданий остаются."
 -- (1.3.5) show the entrance on the map
 L["Show on map"] = "Показать на карте"
 L["Opens the world map at the entrance and lets its pin pulse for a moment."] = "Открывает карту мира у входа, и его метка ненадолго пульсирует."
