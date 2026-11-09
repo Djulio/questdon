@@ -54,6 +54,11 @@ ns.QuestColor = QuestColor
 -- POI, a "?"): with the option "skipGameGivers" no second "?" from Questdon.
 local function GameShowsTurnIn(questID)
   if not (ns.db and ns.db.skipGameGivers) or not ns.QuestPOI then return false end
+  -- (07.11.2026) the game draws none of its round markers on the world map (ns.CheckGameQuestPins): Questdon draws the ?
+  if ns.gameDrawsQuestPins == false then return false end
+  -- (09.11.2026, Daniel near Thelsamar: "questdon zeigt einige quests nicht auf der weltmap an") the game draws its ?
+  -- for some finished quests only: one it left out on the shown map (ns.CheckGameQuestPins) gets Questdon's ?
+  if ns.gameMissesTurnIn and ns.gameMissesTurnIn[questID] then return false end
   -- (17.10., Daniel's screenshots of the three styles) with the game's markers taken off the world map its "?" goes
   -- too: Questdon draws the turn-in then
   -- (18.10., Daniel: "as the standard with our own symbols") the game's ? stays on the map with hideGamePOIs too, as
@@ -63,6 +68,53 @@ local function GameShowsTurnIn(questID)
   return m ~= nil and kind == "turnin"
 end
 ns.GameShowsTurnIn = GameShowsTurnIn
+
+-- (07.11.2026, Daniel: "meine ? zum abgeben sind weg", Forever client build 70862) the game still reports its quests
+-- on the map (C_QuestLog.GetQuestsOnMap, ns.QuestPOI says "turnin") but draws none of its round markers: Westfall with
+-- three finished quests, 0 QuestPinTemplate pins. The shown map is counted shortly after Questdon drew it: finished
+-- quests on it and not one of the game's pins means the game draws no ?, Questdon draws them
+-- (ns.gameDrawsQuestPins = false); a game pin seen again sets it back (true), the game's ? as before. Per session.
+-- (09.11.2026) also the quests of the pins: questID on each pin (QuestPinMixin), ids[questID] = true
+local function GameQuestPinCount(map, ids)
+  local pools = map and map.pinPools
+  local pool = type(pools) == "table" and pools.QuestPinTemplate
+  local n, tagged = 0, false
+  if type(pool) == "table" and type(pool.activeObjects) == "table" then
+    for pin in pairs(pool.activeObjects) do
+      n = n + 1
+      local id = type(pin) == "table" and ns.Num(pin.questID)
+      if id then ids[id], tagged = true, true end
+    end
+  end
+  return n, tagged
+end
+ns.gameMissesTurnIn = {}
+function ns.CheckGameQuestPins()
+  local map = WorldMapFrame
+  if not (map and map.IsShown and ns.True(ns.Value(map.IsShown, map))) then return end
+  local mapID = ns.Num(ns.Value(map.GetMapID, map))
+  local fn = C_QuestLog and C_QuestLog.GetQuestsOnMap
+  if not mapID or type(fn) ~= "function" then return end
+  local ok, list = pcall(fn, mapID)
+  if not ok or type(list) ~= "table" then return end
+  local v
+  local ids = {}
+  local n, tagged = GameQuestPinCount(map, ids)
+  -- (09.11.2026) the game draws markers, but not for every finished quest (Thelsamar: one ? of several): with pins
+  -- that carry their quest, a finished quest on this map without its pin gets Questdon's ? (ns.gameMissesTurnIn)
+  local changed = false
+  if n > 0 then v = true end
+  for _, q in ipairs(list) do
+    local id = type(q) == "table" and ns.Num(q.questID)
+    if id and ns.IsQuestComplete(id) and not ns.IsQuestFailed(id) then
+      if n == 0 then v = false end
+      local miss = (n > 0 and tagged and not ids[id]) or nil
+      if ns.gameMissesTurnIn[id] ~= miss then ns.gameMissesTurnIn[id], changed = miss, true end
+    end
+  end
+  if v ~= nil and ns.gameDrawsQuestPins ~= v then ns.gameDrawsQuestPins, changed = v, true end
+  if changed and ns.QueueRefresh then ns.QueueRefresh("map") end
+end
 
 -- (1.3.5, Daniel 10.10.) The "?" of a finished quest: not only where you turned it in before,
 -- also what other players reported and the turn-in NPC of the data (ns.KnownTurnIn), as long as
@@ -1492,6 +1544,8 @@ function Setup()
       end
     end
     lastSig = sig
+    -- (07.11.2026) does the game draw its own ? here (after its providers and DonMap's clearing ran)
+    if ns.After then ns.After(0.3, function() ns.SafeCall("game quest pins", ns.CheckGameQuestPins) end) end
     return true
   end)
   -- (1.28) zoomed: only with "Merge markers" on, and only when the rounded zoom step changed

@@ -1,5 +1,11 @@
 # Changes
 
+## 1.5.6
+- **Turn-in "?" on the world map:** a finished quest gets its "?" again where the game draws its own marker only for some of your quests (it was missing in Thelsamar), and also when the game's option "Show Quest POIs & Blobs" is off.
+- **The arrow points straight at the target:** no more detours around mountains or to cave entrances, and no yellow dots on the map and minimap.
+- **Arrow with Leveldon:** the arrow follows the quest you picked in the quest list instead of Leveldon's step.
+- Needs DonData 1.2.5.
+
 ## 1.5.5
 - **Quest list stays on screen:** the list never grows past the bottom of the screen, so its handle stays in reach after a reload; it shows fewer quests and "+n more quests" instead.
 - **Areas on the world map:** switching off the areas under the icons takes them away at once, also while the map is open.

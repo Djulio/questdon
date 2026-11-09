@@ -512,6 +512,18 @@ function ns.ClearArrow()
   manual = nil
 end
 
+-- (07.11.2026) the quest you picked yourself beats the guide's step (see SetExternalArrowTarget); not while the
+-- guide's compass shows the way (Leveldon's window then points at its step)
+local guideTracked -- set below with the guide's step
+function ns.PickedOverGuide(ext)
+  if type(ext) ~= "table" or (ns.GuideActive and ns.GuideActive()) then return false end
+  local id = Tracked()
+  if id == 0 or id == guideTracked or id == ns.Num(ext.questID) or not ns.InQuestLog(id) then return false end
+  return true
+end
+-- a click in the quest list: that quest leads, also when it was tracked already when the guide's step came
+function ns.ArrowPickedByHand() guideTracked = nil end
+
 -- (1.3.8, F2) At an object's spot: what to click there ("Here: click the objects for Sack of Grain"); nil for mobs.
 function ns.ArrivedText(t)
   if type(t) ~= "table" or not ns.IsObjectSpot(t.creature) then return nil end
@@ -519,9 +531,16 @@ function ns.ArrivedText(t)
   return thing and L["Here: click the objects for %s"]:format(thing) or L["Here: click the quest objects"]
 end
 
+-- (07.11.2026, Daniel: "the arrow always points to a quest I did not pick": Leveldon's step "Turn in: Find Bingles"
+-- led the arrow while the quest list's card showed his picked quest) the guide's step and the quest tracked when it
+-- came: a quest picked after that (in the list, the quest log) leads the arrow until the guide brings a new step,
+-- while the guide's own compass does not show the way
+local guideLabel -- (guideTracked: above, with PickedOverGuide)
 -- Another addon (QuestdonAPI) can point the arrow; a clicked pin still wins.
 function ns.SetExternalArrowTarget(target)
   external = target
+  local label = type(target) == "table" and (target.label or "") or nil
+  if label ~= guideLabel then guideLabel, guideTracked = label, Tracked() end
   -- (1.3.6) a guide's new area target: look at its spots at once (else the needle shows for a moment)
   if type(target) == "table" and target.area then area.checkAt = nil end
   if target and ns.OfferArrowTarget then ns.OfferArrowTarget() end -- (DonMap M2) the newest guide step at DonMap
@@ -553,6 +572,7 @@ local function OwnTarget()
   -- (Questdon review 3) the guide's step only while its window is shown (Leveldon closed: your own quest)
   local ext, g = external, ns.guideFrame
   if ext and type(g) == "table" and g.IsShown and not g:IsShown() then ext = nil end
+  if ext and ns.PickedOverGuide(ext) then ext = nil end
   if ext then return ext, DM.PRIO.guide end
   if auto then return auto, DM.PRIO.auto end
   return nil

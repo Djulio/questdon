@@ -231,6 +231,7 @@ local function Pick(id)
   if not id then return end
   if C_SuperTrack and C_SuperTrack.SetSuperTrackedQuestID then pcall(C_SuperTrack.SetSuperTrackedQuestID, id) end
   if ns.ClearArrow then ns.ClearArrow() end
+  if ns.ArrowPickedByHand then ns.ArrowPickedByHand() end -- (07.11.2026) your pick beats a guide's step
   if ns.UpdateArrowTarget then ns.UpdateArrowTarget() end
   lastSig = nil
   if ns.QueueRefresh then ns.QueueRefresh("tracker") end
