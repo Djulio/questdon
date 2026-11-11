@@ -172,8 +172,7 @@ function BuildBase(mapID)
   local pins = {}
   if not mapID then return pins end
   if ns.db.availablePins then
-    -- (1.22) with the quests of the next levels (option "upcomingLevels"), dimmed
-    for _, a in ipairs(ns.AvailableQuestsOnMap(mapID, true)) do
+    for _, a in ipairs(ns.AvailableQuestsOnMap(mapID)) do
       if not ns.DrawnElsewhere(a.questID, "start") then
         a.kind = "available"
         pins[#pins + 1] = a
@@ -187,6 +186,8 @@ function BuildBase(mapID)
   -- (1.3.5) a marked dungeon entrance (Dungeons.lua), and the entrances of all dungeons
   local entrance = ns.EntrancePin and ns.EntrancePin(mapID)
   if entrance then pins[#pins + 1] = entrance end
+  -- (10.11.2026) the waypoint of /way (Way.lua)
+  for _, way in ipairs(ns.WayPins and ns.WayPins(mapID) or {}) do pins[#pins + 1] = way end
   for _, d in ipairs(ns.DungeonEntrancePins and ns.DungeonEntrancePins(mapID) or {}) do pins[#pins + 1] = d end
   return pins
 end
@@ -241,7 +242,7 @@ local function SameGiver(a, b)
   return false
 end
 -- One spot for display: close together, or the same quest giver a bit apart.
--- (1.28) cluster: optional wider distance (world map only, option "clusterPins")
+-- cluster: markers closer than this would overlap on screen and merge too (world map: ns.ClusterDistance)
 local function SameSpot(a, b, cluster)
   local dx, dy = math.abs(a.x - b.x), math.abs(a.y - b.y)
   if dx < GROUP_DIST and dy < GROUP_DIST then return true, false end
@@ -357,16 +358,12 @@ function ns.DisplayQuestPins(pins, cluster)
   return ns.GroupQuestPins((ns.SkipGameShownPins(pins, cluster)), cluster)
 end
 
--- (1.28) Option "Merge markers": distance (0-1 map coordinates) under which
--- available pins of the world map merge, from the zoom of the map canvas.
--- The canvas scale is rounded to half steps (a zoom animation must not
--- rebuild the pins every frame). Zoomed in, the same distance is a smaller
--- part of the map, so the markers come apart. nil when the option is off.
-local CLUSTER_DIST = 0.015
 -- (1.3.3) Daniel 08.10., Zephras Isle: its quest givers stand 0.2 to 0.8 map
 -- units apart (0.002-0.008), so their "!" covered each other although none of
--- them shared a giver. Markers that would overlap on screen now always merge
--- (OVERLAP_DIST, zoom-scaled like the cluster); "Merge markers" merges wider.
+-- them shared a giver. Markers that would overlap on screen always merge (OVERLAP_DIST, 0-1 map coordinates).
+-- (10.11.2026, Daniel: dead functions out) the option "Merge markers" (1.28, clusterPins: a wider distance that
+-- followed the map's zoom) is gone: off for everybody since 28.10.2026 and without a switch. The world map merges at
+-- the fixed distance, as it did with the option off; the zoom steps below serve the objective dots.
 local OVERLAP_DIST = 0.012
 ns.MINIMAP_OVERLAP = 0.01 -- minimap: a fixed distance (about one marker at its usual zoom)
 function ns.ClusterBucket(scale)
@@ -376,8 +373,7 @@ function ns.ClusterBucket(scale)
   return math.floor(scale * 2 + 0.5) / 2
 end
 function ns.ClusterDistance(scale)
-  local d = ns.db and ns.db.clusterPins and CLUSTER_DIST or OVERLAP_DIST
-  return d / ns.ClusterBucket(scale)
+  return OVERLAP_DIST / ns.ClusterBucket(scale)
 end
 function ns.DuplicatePinStats() return dupStats end
 
@@ -453,8 +449,6 @@ function ns.QuestPinDescription(pin)
     desc = L["Turn in here"]
     local rewards = ns.QuestRewardLines and ns.QuestRewardLines(pin.questID) or {}
     if #rewards > 0 then desc = desc .. "\n" .. table.concat(rewards, "\n") end
-  elseif pin.notOffered and not pin.upcoming then
-    desc = L["Not offered by the quest giver (level %d)"]:format(pin.notOffered) -- (1.24)
   elseif pin.learned then
     desc = L["Quest available (learned by Questdon)"]
   else
@@ -466,8 +460,6 @@ function ns.QuestPinDescription(pin)
     local level = ns.QuestLevel(pin.questID)
     if level then Add(ns.LevelColor(level) .. L["Level %d"]:format(level) .. "|r")
     else Add("|cff737880" .. L["Level unknown"] .. "|r") end
-    if pin.upcoming then Add("|cff737880" .. L["Not yet: from level %d"]:format(pin.upcoming) .. "|r") end
-    if pin.upcoming and pin.notOffered then Add("|cff737880" .. L["Not offered by the quest giver (level %d)"]:format(pin.notOffered) .. "|r") end
   end
   local giver = GiverText(pin)
   if giver then Add(L["Quest giver: %s"]:format(giver)) end
@@ -492,7 +484,7 @@ function ns.QuestPinDescription(pin)
   end
   if pin.kind ~= "turnin" then Add("|cff999999" .. SOURCE_TEXT[ns.StartSource(pin.questID)] .. "|r") end
   -- (1.24) who says it is available: the game, a quest giver or only the data
-  if pin.kind ~= "turnin" and not (pin.upcoming or pin.notOffered) then
+  if pin.kind ~= "turnin" then
     Add("|cff999999" .. AVAILABLE_TEXT[ns.AvailabilitySource(pin.questID)] .. "|r")
   end
   -- (1.21) grouped pin: the other quests of this quest giver
@@ -578,11 +570,6 @@ function ns.QuestPinTooltip(pin)
   if pin.kind == "turnin" then
     -- (1.3.6) the card's "?" and green stripe say "turn in here"; the line stays only when nothing else follows
     for _, r in ipairs(ns.QuestRewardLines and ns.QuestRewardLines(pin.questID) or {}) do KV(L["Reward"], r) end
-  elseif pin.upcoming then
-    lines[#lines + 1] = L["Not yet: from level %d"]:format(pin.upcoming)
-    if pin.notOffered then lines[#lines + 1] = L["Not offered by the quest giver (level %d)"]:format(pin.notOffered) end
-  elseif pin.notOffered then
-    lines[#lines + 1] = L["Not offered by the quest giver (level %d)"]:format(pin.notOffered) -- (1.24)
   end
   local giver = GiverText(pin)
   if giver then KV(pin.kind == "turnin" and L["Turn in"] or L["Quest giver"], giver) end -- (1.3.5) the turn-in NPC as such
@@ -607,7 +594,7 @@ function ns.QuestPinTooltip(pin)
   local refused = pin.kind ~= "turnin" and ns.NotHereLevels and ns.NotHereLevels(pin.questID)
   if refused then KV(L["Not offered at"], ns.NotHereLevelText(refused), "textHint") end
   if pin.kind ~= "turnin" then
-    local src = not (pin.upcoming or pin.notOffered) and ns.AvailabilitySource(pin.questID) or nil
+    local src = ns.AvailabilitySource(pin.questID)
     if details then
       KV(L["Location"], SOURCE_SHORT[ns.StartSource(pin.questID)])
       if src then KV(L["Available"], AVAILABLE_SHORT[src], src == "database" and "textHint" or "good") end
@@ -617,7 +604,7 @@ function ns.QuestPinTooltip(pin)
     end
   end
   -- (20.10.) a hint for the way (Data/Quest_Hints.lua)
-  local wayHint = not pin.upcoming and ns.QuestHint and ns.QuestHint(pin.questID)
+  local wayHint = ns.QuestHint and ns.QuestHint(pin.questID)
   if wayHint then lines[#lines + 1] = "|cffdcc17f" .. L["Hint"] .. ":|r " .. wayHint end
   if pin.kind == "turnin" and #lines == 0 then lines[1] = L["Turn in here"] end
   return ns.LevelTitle(pin.questID), lines, ns.QuestPinHint(pin)
@@ -640,10 +627,6 @@ function ns.QuestGroupTooltip(pin)
     if ns.QuestFlags(p.questID):find("b", 1, true) then title = title .. " (" .. L["Breadcrumb quest"] .. ")" end
     if p.kind == "turnin" then
       lines[#lines + 1] = { title, L["Turn in here"], "good" } -- (16.10.) a turn-in in the giver's marker
-    elseif p.upcoming then
-      lines[#lines + 1] = { title, L["from level %d"]:format(p.upcoming), "textHint" }
-    elseif p.notOffered then
-      lines[#lines + 1] = { title, L["not offered (level %d)"]:format(p.notOffered), "textHint" } -- (1.24)
     else
       lines[#lines + 1] = { title }
     end
@@ -1013,12 +996,11 @@ local zoomCache, zoomCacheSig, zoomCacheN = {}, nil, 0
 -- display options of the last build: a changed option (areas, symbols, sizes) builds anew, even with the same pins
 local lastZKey
 local ZOOM_KEEP = 4
-local function ZoomKey(clusterB, objB)
-  return ("%s|%s|%s|%s|%s|%s|%s|%s"):format(clusterB, objB, ns.SymbolsOn() and 1 or 0, tostring(ns.db.thinObjectives),
-    tostring(ns.db.objectivePinSize), tostring(ns.db.objectiveAreas), tostring(ns.db.clusterPins), tostring(ns.db.skipGameGivers))
+local function ZoomKey(objB)
+  return ("%s|%s|%s|%s|%s|%s"):format(objB, ns.SymbolsOn() and 1 or 0, tostring(ns.db.thinObjectives),
+    tostring(ns.db.objectivePinSize), tostring(ns.db.objectiveAreas), tostring(ns.db.skipGameGivers))
 end
 function ns.MapZoomCacheSize() return zoomCacheN end
-local clusterBucket = 1 -- (1.28) zoom step the pins were last built for
 local objBucket, objThinned = 1, false -- (1.3.5) zoom step of the objective thinning; true: another zoom can change the dots
 local stats = { builds = 0, skipped = 0 }
 local function PinKey(p)
@@ -1026,7 +1008,7 @@ local function PinKey(p)
   -- its key is made once
   if p.kind == "objective" and p._key then return p._key end
   local extra = ""
-  if p.kind == "entrance" or p.kind == "dungeon" then
+  if p.kind == "entrance" or p.kind == "dungeon" or p.kind == "way" then
     extra = tostring(p.name) .. tostring(p.inst)
   elseif p.kind ~= "objective" then
     extra = ns.QuestTitle(p.questID)
@@ -1038,7 +1020,7 @@ local function PinKey(p)
   -- (1.23) one string per pin (was a table of 13 strings)
   local key = ("%s:%s:%s:%.4f:%.4f:%s:%s:%s:%s:%s:%s:%s:%s"):format(tostring(p.kind), tostring(p.questID), tostring(p.index or ""),
     tonumber(p.x) or 0, tonumber(p.y) or 0, (p.dimmed and "d" or "") .. (p.small and "s" or ""), p.learned and "l" or "",
-    tostring(p.upcoming or "") .. "/" .. tostring(p.notOffered or "") .. (p.confirmed and "c" or "") .. (p.gameShown and "g" or ""), -- (1.24, 1.25)
+    (p.confirmed and "c" or "") .. (p.gameShown and "g" or ""), -- (1.24, 1.25)
     tostring(p.npc or ""), tostring(p.kind ~= "objective" and p.text or "") .. tostring(p.statusText or "") .. tostring(p.iconKind or ""), tostring(p.needsItem or ""), tostring(p.creature or ""), extra)
   if p.kind == "objective" then p._key = key end
   return key
@@ -1151,13 +1133,42 @@ function Setup()
     end
     self.qdHighlighted = on and true or false
   end
+  -- (11.11.2026, Daniel: "Pin mit der Spitze auf die Koordinate") the picture of a waypoint stands on its spot: the
+  -- texture sits above the middle of the pin; a pin used again for something else gets its picture back in the middle
+  local function WayAnchor(self, on)
+    if not on and not self.qdWayAnchor then return end
+    for _, tex in ipairs({ self.Texture, self.HighlightTexture }) do
+      if type(tex) == "table" and tex.ClearAllPoints and tex.SetPoint then
+        pcall(tex.ClearAllPoints, tex)
+        if on then pcall(tex.SetPoint, tex, "BOTTOM", self, "CENTER", 0, 0) else pcall(tex.SetPoint, tex, "CENTER", self, "CENTER", 0, 0) end
+      end
+    end
+    self.qdWayAnchor = on or nil
+  end
   function QuestPin:OnAcquired(pin)
+    WayAnchor(self, false)
     ApplyHighlight(self, pin)
     -- (1.3.5) a marked dungeon entrance: the game's dungeon entrance icon
     if pin.kind == "entrance" then
       local name = L["Entrance: %s"]:format(pin.name or "?")
       BaseMapPoiPinMixin.OnAcquired(self, { name = name, atlasName = "Dungeon", position = CreateVector2D(pin.x, pin.y) })
       self.qdName, self.qdDesc, self.qdPin = name, L["Click: dungeon journal, right-click: remove the mark"], pin
+      if self.SetAlpha then pcall(self.SetAlpha, self, 1) end
+      return
+    end
+    -- (10.11.2026) the waypoint of /way: our "place" symbol; a right-click removes it
+    if pin.kind == "way" then
+      BaseMapPoiPinMixin.OnAcquired(self, { name = pin.name or "?", atlasName = "QuestNormal", position = CreateVector2D(pin.x, pin.y) })
+      local size = math.floor(ns.WAY_PIN_SIZE * ns.WayPinScale() + 0.5)
+      for _, tex in ipairs({ self.Texture, self.HighlightTexture }) do
+        if type(tex) == "table" and tex.SetTexture then
+          pcall(tex.SetTexture, tex, ns.WAY_ICON)
+          if tex.SetSize then pcall(tex.SetSize, tex, size, size) end -- (11.11.2026) smaller, and the size the player set
+        end
+      end
+      if self.SetSize then pcall(self.SetSize, self, size, size * 2) end -- the mouse finds the whole picture
+      WayAnchor(self, true)
+      self.qdName, self.qdDesc, self.qdPin = pin.name or "?", L["Click: arrow, right-click: remove waypoints"], pin
       if self.SetAlpha then pcall(self.SetAlpha, self, 1) end
       return
     end
@@ -1182,9 +1193,7 @@ function Setup()
       position = CreateVector2D(pin.x, pin.y),
     })
     self.qdName, self.qdDesc, self.qdPin = title, nil, pin
-    -- (1.22) quests of the next levels: dimmed, like on the minimap
-    -- (1.24) and quests the quest giver did not offer at your level
-    if self.SetAlpha then pcall(self.SetAlpha, self, (pin.upcoming or pin.notOffered or pin.dimmed) and 0.5 or 1) end
+    if self.SetAlpha then pcall(self.SetAlpha, self, pin.dimmed and 0.5 or 1) end
   end
   function QuestPin:ApplyCurrentScale() ScaleBy(self, BaseMapPoiPinMixin.ApplyCurrentScale or MapCanvasPinMixin.ApplyCurrentScale) end
   -- Left click: point the arrow there.
@@ -1199,6 +1208,12 @@ function Setup()
     if self.qdPin and self.qdPin.kind == "entrance" then
       if button == "RightButton" then ns.RemoveEntranceMark("pin")
       elseif button == "LeftButton" then ns.OpenDungeonJournal(self.qdPin.inst) end
+      return
+    end
+    -- (10.11.2026) a waypoint of /way: a right-click removes it, a click points the arrow at it
+    if self.qdPin and self.qdPin.kind == "way" then
+      if button == "RightButton" then ns.WayMenu(self.qdPin.way)
+      elseif button == "LeftButton" then ns.PickWay(self.qdPin.way) end
       return
     end
     -- (1.1) Alt-click: "no quest here" (NotHere.lua)
@@ -1216,7 +1231,7 @@ function Setup()
   -- after OnAcquired. Entrance pins keep their right-click (the arrow mark); quest pins zoom out as before.
   function QuestPin:ShouldMouseButtonBePassthrough(button)
     local kind = self.qdPin and self.qdPin.kind
-    if button == "RightButton" and (kind == "dungeon" or kind == "entrance") then return false end
+    if button == "RightButton" and (kind == "dungeon" or kind == "entrance" or kind == "way") then return false end
     return button == "RightButton"
   end
   -- (1.2) map canvases that call OnClick instead of OnMouseClickAction
@@ -1230,6 +1245,7 @@ function Setup()
   QuestPin.OnMouseEnter = ns.Guard("map tooltip", function(self)
     if not self.qdPin then return end
     local tip = self.qdPin.kind == "entrance" and ns.EntrancePinTooltip or self.qdPin.kind == "dungeon" and ns.DungeonPinTooltip
+      or self.qdPin.kind == "way" and ns.WayPinTooltip
       or self.qdPin.group and ns.QuestGroupTooltip or ns.QuestPinTooltip
     local title, lines, hint = tip(self.qdPin)
     -- (1.3.6) our own hover card (PinCard.lua)
@@ -1469,10 +1485,7 @@ function Setup()
     if ns.HarvestQuestLines then ns.HarvestQuestLines(mapID) end
     return ns.PinsForMap(mapID)
   end
-  local function Scales(map)
-    local canvas = map.GetCanvasScale and ns.Value(map.GetCanvasScale, map) or nil
-    return ns.db.clusterPins and canvas or nil, canvas
-  end
+  local function Canvas(map) return map.GetCanvasScale and ns.Value(map.GetCanvasScale, map) or nil end
   local opts = { templates = { QUEST_TEMPLATE, OBJECTIVE_TEMPLATE, AREA_TEMPLATE }, stats = stats }
   opts.ask = ns.Guard("map", function(prov, map, closed)
     ns.RedrawGameIfPending() -- (18.10.) the option went off: the game draws its markers again once
@@ -1488,9 +1501,8 @@ function Setup()
     curMap, curPins, curSig = mapID, pins, sig
     if pre or not lastSig then return false end
     if ns.OpenMapEntrances() ~= lastOpenMap then return false end -- (06.11.2026) OpenMap's stitched map came or went
-    local scale, canvas = Scales(map)
-    if ns.ClusterBucket(scale) ~= clusterBucket or ns.ClusterBucket(canvas) ~= objBucket then return false end
-    if ZoomKey(clusterBucket, objBucket) ~= lastZKey then return false end
+    if ns.ClusterBucket(Canvas(map)) ~= objBucket then return false end
+    if ZoomKey(objBucket) ~= lastZKey then return false end
     curSig = ns.PinsSignature(mapID, pins)
     return curSig == lastSig
   end)
@@ -1504,13 +1516,11 @@ function Setup()
     curMap, curPins, curSig = nil, nil, nil
     -- (1.21) quest givers with several quests: one pin (display only)
     -- (1.25) and no second "!" where the game draws one
-    local scale, canvas = Scales(map)
-    clusterBucket = ns.ClusterBucket(scale)
     -- (1.3.5) dense objective dots: fewer markers (quest givers and turn-ins are never thinned)
-    objBucket = ns.ClusterBucket(canvas)
+    objBucket = ns.ClusterBucket(Canvas(map))
     local display, areas
     sig = sig or ns.PinsSignature(mapID, pins)
-    local zkey = ZoomKey(clusterBucket, objBucket)
+    local zkey = ZoomKey(objBucket)
     lastZKey = zkey
     if zoomCacheSig ~= mapID .. "#" .. tostring(sig) then zoomCache, zoomCacheSig, zoomCacheN = {}, mapID .. "#" .. tostring(sig), 0 end
     local cached = zoomCache[zkey]
@@ -1519,10 +1529,10 @@ function Setup()
       stats.zoomCached = (stats.zoomCached or 0) + 1
     elseif ns.SymbolsOn() then
       -- (17.10.) symbols: each objective's groups of spots as one symbol with its area (zoom changes the groups)
-      display, areas = ns.SymbolWorldObjectives(ns.DisplayQuestPins(pins, ns.ClusterDistance(scale)), objBucket)
+      display, areas = ns.SymbolWorldObjectives(ns.DisplayQuestPins(pins, ns.ClusterDistance()), objBucket)
       objThinned = true
     else
-      display = ns.ThinWorldObjectives(ns.DisplayQuestPins(pins, ns.ClusterDistance(scale)), objBucket, ns.db.objectivePinSize or 12)
+      display = ns.ThinWorldObjectives(ns.DisplayQuestPins(pins, ns.ClusterDistance()), objBucket, ns.db.objectivePinSize or 12)
       local ts = ns.WorldThinStats()
       objThinned = ts.before > ts.after or ts.before > ns.WORLD_OBJECTIVE_BUDGET
     end
@@ -1548,17 +1558,18 @@ function Setup()
     if ns.After then ns.After(0.3, function() ns.SafeCall("game quest pins", ns.CheckGameQuestPins) end) end
     return true
   end)
-  -- (1.28) zoomed: only with "Merge markers" on, and only when the rounded zoom step changed
-  -- (1.3.5) and when objective dots were thinned for another zoom step (the budget follows the zoom)
+  -- (1.3.5) zoomed: only when objective dots were thinned for another zoom step (the budget follows the zoom), and
+  -- only when the rounded zoom step changed
   opts.zoomed = ns.Guard("map", function(prov, map, scale)
     local thin = objThinned and (ns.db.thinObjectives ~= false or ns.SymbolsOn())
-    if not ns.db.clusterPins and not thin then return false end
-    local bucket = ns.ClusterBucket(ns.Num(scale))
-    return (ns.db.clusterPins and bucket ~= clusterBucket) or (thin and bucket ~= objBucket) or false
+    if not thin then return false end
+    return ns.ClusterBucket(ns.Num(scale)) ~= objBucket
   end)
   if not (DonMapAPI and (DonMapAPI.version or 0) >= 4) then setupFailed = "old DonMap" return end
   provider = DonMapAPI.NewWorldProvider("questdon", opts)
-  if not provider then setupFailed = true end
+  if not provider then setupFailed = true return end
+  -- (10.11.2026) the map closed (the canvas tells its data providers): what was shown only for this look goes
+  provider.OnHide = ns.Guard("map", function() if ns.MapClosed then ns.MapClosed() end end)
 end
 
 -- (17.10., Daniel: "the game's own markers are annoying, build the option in") Option hideGamePOIs (off): the game's
@@ -1661,7 +1672,7 @@ local function RefreshIfChanged()
     if ns.HarvestQuestLines then ns.HarvestQuestLines(mapID) end
     local pins = ns.PinsForMap(mapID)
     local sig = ns.PinsSignature(mapID, pins)
-    if lastSig and sig == lastSig and ZoomKey(clusterBucket, objBucket) == lastZKey then stats.skipped = stats.skipped + 1 return end
+    if lastSig and sig == lastSig and ZoomKey(objBucket) == lastZKey then stats.skipped = stats.skipped + 1 return end
     precomputed = { mapID = mapID, pins = pins, sig = sig }
   end
   provider:RefreshAllData()

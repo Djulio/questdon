@@ -97,9 +97,9 @@ local DATA_ONLY = {
   dungeonPins = false, dungeonPinsMinimap = false, learnPins = false, hideGamePOIs = false, unitTooltips = false, servicePins = false,
   -- windows: quest list, arrow, XP bar, quest item and target buttons
   tracker = false, arrow = false, arrowNext = false, pathDots = false, arrowCorpse = false, xpBar = false,
-  ownRepBar = false, questItemButton = false, targetButton = false, exportBlizzardWaypoint = false, exportTomTom = false,
+  ownRepBar = false, questItemButton = false, targetButton = false, exportTomTom = false,
   -- automation, hints and sounds
-  autoAccept = false, autoTurnIn = false, autoPickBest = false, highlightBest = false, suggestReward = false,
+  autoAccept = false, autoTurnIn = false, highlightBest = false, suggestReward = false,
   chainHint = false, shareQuests = false, dungeonHint = false, notifySound = false, notifyText = false,
   sellJunk = false, autoRepair = false, fastLoot = false, journalShots = false, journalLevelShot = false,
 }

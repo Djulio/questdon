@@ -271,6 +271,7 @@ local function PinTooltip(self)
   local title, lines, hint
   if self.members and #self.members > 1 then title, lines, hint = ns.ObjectiveBundleTooltip(self.members) -- (1.3.5) a bundle
   elseif pin.kind == "entrance" then title, lines, hint = ns.EntrancePinTooltip(pin) -- (1.3.5)
+  elseif pin.kind == "way" then title, lines, hint = ns.WayPinTooltip(pin) -- (10.11.2026)
   elseif pin.kind == "dungeon" then title, lines, hint = ns.DungeonPinTooltip(pin)
   elseif pin.group then title, lines, hint = ns.QuestGroupTooltip(pin)
   elseif pin.kind == "objective" then title, lines, hint = ns.ObjectivePinTooltip(pin)
@@ -295,6 +296,12 @@ local function PinClick(self, button)
   if pin and pin.kind == "entrance" then
     if button == "RightButton" then ns.RemoveEntranceMark("pin")
     elseif button == "LeftButton" then ns.OpenDungeonJournal(pin.inst) end
+    return
+  end
+  -- (10.11.2026) the waypoint of /way: a right-click removes it, a click points the arrow at it again
+  if pin and pin.kind == "way" then
+    if button == "RightButton" then ns.WayMenu(pin.way)
+    elseif button == "LeftButton" then ns.PickWay(pin.way) end
     return
   end
   -- (1.1) Alt-click: "no quest here" (NotHere.lua)
@@ -382,7 +389,23 @@ local function Look(b, pin, scale)
   Unturn(b)
   -- (review 6) a reused button: the texture coordinates an atlas or an item icon set before go
   if b.icon.SetTexCoord then b.icon:SetTexCoord(0, 1, 0, 1) end
-  if pin.kind == "entrance" or pin.kind == "dungeon" then
+  -- (11.11.2026, Daniel: "Pin mit der Spitze auf die Koordinate") a button that was a waypoint: its picture fills it again
+  if b.wayAnchor and pin.kind ~= "way" then
+    b.icon:ClearAllPoints()
+    b.icon:SetAllPoints(b)
+    b.wayAnchor = nil
+  end
+  if pin.kind == "way" then -- (10.11.2026) a waypoint of /way: our own pin, its point on the spot
+    b.ring:Hide()
+    local size = math.max(3, math.floor(R(QUEST_SIZE + 4) * ns.WayPinScale() + 0.5)) -- the pin is narrower than its square
+    b:SetSize(size, size * 2) -- the mouse finds the whole picture
+    b.icon:ClearAllPoints()
+    b.icon:SetPoint("BOTTOM", b, "CENTER", 0, 0)
+    b.icon:SetSize(size, size)
+    b.wayAnchor = true
+    b.icon:SetTexture(ns.WAY_ICON)
+    b.icon:SetVertexColor(1, 1, 1)
+  elseif pin.kind == "entrance" or pin.kind == "dungeon" then
     -- (1.3.5) the game's dungeon entrance icon; the mark a bit larger than a quest marker, the others smaller
     b.ring:Hide()
     local size = R(pin.kind == "entrance" and QUEST_SIZE + 20 or QUEST_SIZE + 8) -- (20.10., Daniel: far too small, the atlas icon has a wide empty edge) 34 and 22
@@ -635,7 +658,7 @@ end
 ns.MinimapEntries = function() return entries end -- (tests)
 
 -- available quests first (they are what you look for), then turn-ins, then dots
-local ORDER = { entrance = 0, focus = 0, dungeon = 1, available = 1, turnin = 2, objective = 3 }
+local ORDER = { entrance = 0, focus = 0, way = 0, dungeon = 1, available = 1, turnin = 2, objective = 3 }
 local function ByKind(a, b)
   local oa, ob = ORDER[a.kind] or 4, ORDER[b.kind] or 4
   if oa ~= ob then return oa < ob end
@@ -820,7 +843,10 @@ function ns.RefreshMinimapPins(force)
 end
 
 -- (1.23) Batched with the other quest displays (Core.lua, 0.5 s).
-ns.RegisterRefresh("minimap", function() if Enabled() then Rebuild(false) end end)
+-- (10.11.2026, Daniel: "die blizzard marker blitzen immer kurz auf, wenn man steht") a rebuild gives every button back
+-- (src:Release); place them in the same frame, not at the next tick of the clock (up to 0.1 s without pins, the
+-- game's own "!" and "?" under them showed through)
+ns.RegisterRefresh("minimap", function() if Enabled() then Rebuild(false) Update() end end)
 local function Queue()
   if Enabled() then ns.QueueRefresh("minimap") end
 end

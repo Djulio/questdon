@@ -97,12 +97,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
       -- nearby: it sent players far away to quests the data knew but the game
       -- did not offer, while the game's own ! were closer.
       if not QuestdonDB.nextHintV10 then
-        QuestdonDB.nextQuestHint, QuestdonDB.nextConfirmedOnly, QuestdonDB.nextHintV10 = false, true, true
-      end
-      -- (1.3.6, Daniel 12.10.: "we are at the stage where Questie no longer needs priority") off once for everybody;
-      -- who wants it back switches it on again (page "Questie")
-      if not QuestdonDB.questieV136 then
-        QuestdonDB.questieFirst, QuestdonDB.questieV136 = false, true
+        QuestdonDB.nextConfirmedOnly, QuestdonDB.nextHintV10 = true, true
       end
       -- (1.3.7, Daniel 13.10.: "by default the compass in the list and the arrow off") once: with the list and its
       -- compass on, the separate arrow window goes off (switch it on again for both at once)
@@ -142,6 +137,14 @@ frame:SetScript("OnEvent", function(_, event, ...)
       -- (28.10.2026, Daniel: "Sachen vorgeben, weil wir sind die Entwickler") the options no longer in the window: once to
       -- the value we chose (Options.lua ns.FIXED_OPTIONS)
       if ns.ApplyFixedOptions then ns.ApplyFixedOptions(QuestdonDB) end
+      -- (10.11.2026, Daniel: better without packing more in) the developer tools /qd xpcheck and /qd nettest left the
+      -- addon: what they stored goes too
+      QuestdonDB.xpcheck, QuestdonDB.netTest = nil, nil
+      -- (10.11.2026, Daniel: "Questie has priority" fixed off) the switch and its mark go
+      QuestdonDB.questieFirst, QuestdonDB.questieV136 = nil, nil
+      -- and what nothing reads any more: the old "nearest quest" switch, the automatic reward pick, the Blizzard map pin
+      QuestdonDB.nextQuestHint, QuestdonDB.autoPickBest, QuestdonDB.exportBlizzardWaypoint = nil, nil, nil
+      QuestdonDB.clusterPins, QuestdonDB.upcomingLevels = nil, nil -- "Merge markers" and the quests of the next levels
     end)
     -- (1.24) per character: what quest givers offered (Offers.lua)
     if type(QuestdonCharDB) ~= "table" then QuestdonCharDB = {} end
@@ -158,7 +161,7 @@ end)
 
 SLASH_QUESTDON1 = "/qd"
 SLASH_QUESTDON2 = "/questdon"
-ns.HELP = L["Commands: /qd (options), /qd list (quest list), /qd arrow, /qd xpbar, /qd next, /qd xp, /qd dungeons, /qd zone (quests of the zone), /qd journal (quest journal), /qd search [text], /qd group, /qd questie, /qd export, /qd diag (diagnostics), /qd missing (nonexistent quests), /qd xpcheck (XP sources), /qd nettest (channel test), /qd nothere (targeted NPC has no quest: hide it; undo, list), /qd why [quest ID] (why no !), /qd reset (reset button position)"]
+ns.HELP = L["Commands: /qd (options), /qd list (quest list), /qd arrow, /qd xpbar, /qd next, /qd xp, /qd dungeons, /qd zone (quests of the zone), /qd journal (quest journal), /qd search [text], /qd group, /qd export, /qd diag (diagnostics), /qd missing (nonexistent quests), /qd nothere (targeted NPC has no quest: hide it; undo, list), /qd why [quest ID] (why no !), /qd reset (reset button position)"]
 SlashCmdList.QUESTDON = ns.Guard("slash", function(msg)
   local raw = strtrim and strtrim(msg or "") or (msg or "")
   msg = raw:lower()
@@ -167,6 +170,11 @@ SlashCmdList.QUESTDON = ns.Guard("slash", function(msg)
   if text then
     if ns.OpenQuestBook then ns.OpenQuestBook("search") end
     if ns.JournalSetQuery then ns.JournalSetQuery(text) end
+    return
+  end
+  -- (10.11.2026) /qd way ...: the waypoint (Way.lua; "/way" itself only without TomTom)
+  if msg == "way" or msg:match("^way%s") then
+    if ns.WayCommand then ns.WayCommand(raw:sub(4)) end
     return
   end
   if msg == "" or msg == "options" or msg == "config" then
@@ -190,8 +198,6 @@ SlashCmdList.QUESTDON = ns.Guard("slash", function(msg)
     if ns.ToggleTracker then ns.ToggleTracker() end
   elseif msg == "list reset" then
     if ns.RescueTracker then ns.RescueTracker() end -- (06.11.2026) the list back on screen
-  elseif msg == "questie" then
-    if ns.PrintQuestieStatus then ns.PrintQuestieStatus() end
   elseif msg == "xp" then
     if ns.PrintPlanner then ns.PrintPlanner() end
   elseif msg == "export" or msg == "export all" then
@@ -227,8 +233,6 @@ SlashCmdList.QUESTDON = ns.Guard("slash", function(msg)
     if ns.MemoryCheck then ns.MemoryCheck(tonumber(msg:match("(%d+)$"))) end
   elseif msg == "diag" then
     if ns.OpenDiag then ns.OpenDiag() end
-  elseif msg == "xpcheck" or msg == "xpcheck reset" then
-    if ns.OpenXPCheck then ns.OpenXPCheck(msg == "xpcheck reset" and "reset" or nil) end
   elseif msg == "dungeonlevels" then
     -- (1.3.5) the level ranges of the data and the game, and the entrances, to check the data
     if ns.OpenDungeonLevels then ns.OpenDungeonLevels() end
@@ -249,8 +253,6 @@ SlashCmdList.QUESTDON = ns.Guard("slash", function(msg)
     if ns.ToggleJournal then ns.ToggleJournal() end
   elseif msg == "search" or msg == "suche" then
     if ns.OpenQuestBook then ns.OpenQuestBook("search") end
-  elseif msg == "nettest" then
-    if ns.NetTest then ns.NetTest() end
   elseif msg == "help" then
     ns.Print(ns.HELP)
   else

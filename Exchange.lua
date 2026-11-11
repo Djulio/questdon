@@ -1201,7 +1201,9 @@ local function SpotsOfKey(list, key, e)
   if not q then return end
   local v = Best(e)
   -- (16.10.) spots on a continent (sent before 1.3.9) are left out
-  if v and v.m and not (ns.IsZoneMap and not ns.IsZoneMap(v.m)) then
+  -- (10.11.2026) and spots at a bank or auction house (items moved there, not found; Learn.lua ns.AtService)
+  if v and v.m and not (ns.IsZoneMap and not ns.IsZoneMap(v.m))
+      and not (ns.AtService and v.x and v.y and ns.AtService(v.m, v.x / 100, v.y / 100)) then
     q, i = tonumber(q), tonumber(i)
     list[q] = list[q] or {}
     local l = list[q][i] or {}

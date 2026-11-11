@@ -117,13 +117,6 @@ function ns.CreatureIDFromGUID(guid)
   return v or nil
 end
 
-local function QuestieShowsTooltip(questID)
-  if not (ns.db.questieFirst and ns.QuestieOn()) then return false end -- (review 2) Questie switched off draws nothing
-  local p = type(Questie) == "table" and type(Questie.db) == "table" and Questie.db.profile
-  if type(p) ~= "table" or p.enableTooltips == false then return false end
-  return ns.QuestieKnows(questID) == true
-end
-
 -- Lines for one creature: objectives first, then quests it gives.
 function ns.TooltipLinesForCreature(creatureID)
   Index()
@@ -132,7 +125,7 @@ function ns.TooltipLinesForCreature(creatureID)
     local questID, index = ns.ObjectiveEntry(entry)
     local own = false
     -- (Questdon review 4) not for a failed quest (the timer ran out): its mobs no longer count
-    if ns.InQuestLog(questID) and not ns.IsQuestComplete(questID) and not ns.IsQuestFailed(questID) and not QuestieShowsTooltip(questID) then
+    if ns.InQuestLog(questID) and not ns.IsQuestComplete(questID) and not ns.IsQuestFailed(questID) then
       local o = ns.ClientObjectives(questID)[index]
       if not (type(o) == "table" and ns.True(o.finished)) then
         local text = type(o) == "table" and type(o.text) == "string" and ns.Usable(o.text) and o.text or ""
@@ -154,7 +147,7 @@ function ns.TooltipLinesForCreature(creatureID)
     local q = ns.Num(info.questID)
     local e = q and ns.db.learned and ns.db.learned[q]
     local ender = (e and e.finish and e.finish.npcID) or (q and ns.QUEST_ENDS and ns.QUEST_ENDS[q] and ns.QUEST_ENDS[q][4])
-    if q and ender == creatureID and not QuestieShowsTooltip(q) then
+    if q and ender == creatureID then
       turnins[#turnins + 1] = { q, ns.IsQuestComplete(q) and true or false }
     end
   end
@@ -167,7 +160,7 @@ function ns.TooltipLinesForCreature(creatureID)
     -- level only once confirmed (or with "showNoLevel")
     local listed = ns.ClientAvailability(questID) == true and not ns.IsQuestDone(questID) and not ns.InQuestLog(questID)
     if (listed or ns.CanTakeQuest(questID)) and (listed or not ns.NoLevelHidden(questID))
-        and not QuestieShowsTooltip(questID) then
+        then
       local dungeon = ns.QuestDungeon and ns.QuestDungeon(questID)
       local tag = ns.QuestLevelTag(questID) -- (1.22) "[?]" when the level is unknown
       lines[#lines + 1] = { "! " .. tag .. ns.QuestTitle(questID)

@@ -275,6 +275,39 @@ local function PickedQuest()
   return nil
 end
 
+-- (10.11.2026) moved here from XPCheck.lua, which left the addon (a developer tool); a client format string as a
+-- Lua pattern
+-- "%s dies, you gain %d experience." -> "^(.-) dies, you gain ([%-%+]?[%d%.,]+) experience%.$"
+-- Returns pattern and the argument index of every capture, or nil.
+local function ToPattern(fmt)
+  if type(fmt) ~= "string" or not ns.Usable(fmt) or fmt == "" then return nil end
+  local out, args, auto, i = { "^" }, {}, 0, 1
+  while i <= #fmt do
+    local c = fmt:sub(i, i)
+    if c == "%" then
+      local pos, conv, e = fmt:match("^%%(%d+)%$[%-%d%.]*([sdif])()", i)
+      if not conv then conv, e = fmt:match("^%%[%-%d%.]*([sdif])()", i) end
+      if conv then
+        if pos then pos = tonumber(pos) else auto = auto + 1 pos = auto end
+        args[#args + 1] = pos
+        out[#out + 1] = conv == "s" and "(.-)" or "([%-%+]?[%d%.,]+)"
+        i = e
+      elseif fmt:sub(i + 1, i + 1) == "%" then
+        out[#out + 1] = "%%"
+        i = i + 2
+      else
+        return nil -- unknown conversion
+      end
+    else
+      out[#out + 1] = c:find("[%^%$%(%)%.%[%]%*%+%-%?]") and ("%" .. c) or c
+      i = i + 1
+    end
+  end
+  out[#out + 1] = "$"
+  return table.concat(out), args
+end
+ns.FormatPattern = ToPattern -- (tests)
+
 -- "You are now %s with %s." and the like as a pattern: the captures by argument number.
 -- Kept per global string; a different text of the global (another language) makes a new one.
 local patterns = {}
@@ -283,8 +316,7 @@ local function Parse(global, msg)
   if type(fmt) ~= "string" or not ns.Usable(fmt) then return nil end
   local p = patterns[global]
   if not p or p.fmt ~= fmt then
-    local pat, args
-    if ns.FormatPattern then pat, args = ns.FormatPattern(fmt) end -- (not "a and f()": that keeps one value)
+    local pat, args = ToPattern(fmt)
     p = { fmt = fmt, pat = pat, args = args }
     patterns[global] = p
   end

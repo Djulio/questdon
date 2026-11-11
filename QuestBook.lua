@@ -2952,7 +2952,7 @@ function ns.QuestBookDetail(id)
   -- giver's name and place take a click: the zone map opens with the giver marked (and the arrow to it)
   local inside = m and ns.QuestStartsInside(id)
   local show = (m and x and not inside) and function() ns.ShowQuestGiver(id) end or nil
-  local tip = show and { giver or L["Quest giver"], { L["Click: show on the zone map"] } } or nil
+  local tip = show and { giver or L["Quest giver"], { L["Click: show on the zone map"], L["Shift-click: also the arrow"] } } or nil
   if giver then start[#start + 1] = { giver, show and "accent" or "textPrimary", onClick = show, tip = tip } end
   if m then start[#start + 1] = { Where(m, x, y), "textSecondary", onClick = show, tip = tip } end
   if inside then start[#start + 1] = { L["Starts inside the dungeon"], "accent" } end

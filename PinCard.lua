@@ -25,11 +25,10 @@ local MAX_LINES = 14     -- a group of quests: the builder already cuts at 10 (+
 local KIND = {
   available = { 1.00, 0.82, 0.10 },
   turnin    = { 0.40, 0.85, 0.45 },
-  upcoming  = { 0.55, 0.56, 0.62 },
   focus     = { 0.25, 0.66, 0.96 },
   dungeon   = { 0.45, 0.62, 1.00 },
 }
-local ATLAS = { available = "QuestNormal", turnin = "QuestTurnin", upcoming = "QuestNormal", dungeon = "Dungeon" }
+local ATLAS = { available = "QuestNormal", turnin = "QuestTurnin", dungeon = "Dungeon" }
 
 local function B(name) return ns.Style and ns.Style.BOOK and ns.Style.BOOK[name] end
 local function C(name)
@@ -53,8 +52,8 @@ function ns.PinCardKind(pin, questID)
   if kind == "dungeon" or kind == "entrance" then return "dungeon", KIND.dungeon, ATLAS.dungeon end
   if kind == "objective" then return "objective", { ns.QuestColor(pin.questID or 0) }, nil end
   if kind == "focus" then return "focus", KIND.focus, ATLAS.available end
+  if kind == "way" then return "focus", KIND.focus, nil end -- (10.11.2026) the waypoint of /way
   if kind == "turnin" or pin.iconKind == "turnin" then return "turnin", KIND.turnin, ATLAS.turnin end
-  if pin.upcoming or pin.notOffered then return "upcoming", KIND.upcoming, ATLAS.upcoming end
   return "available", KIND.available, ATLAS.available
 end
 
@@ -222,7 +221,7 @@ function ns.PinCard(owner, title, lines, hint, kind, color, atlas)
   f.icon:Hide() f.dot:Hide()
   local lead = 0
   if atlas and f.icon.SetAtlas and pcall(f.icon.SetAtlas, f.icon, atlas, false) then
-    f.icon:SetAlpha(kind == "upcoming" and 0.6 or 1)
+    f.icon:SetAlpha(1)
     f.icon:Show()
     f.lead = atlas
     lead = ICON + 5

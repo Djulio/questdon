@@ -63,7 +63,6 @@ local function FindBest()
 end
 
 local Suggest -- (1.3.8, below)
-local pausedAtOpen = false
 local function Evaluate()
   HideMarker()
   if Suggest then pcall(Suggest) end
@@ -72,22 +71,14 @@ local function Evaluate()
   if not open then waiting = false return end
   if (ns.Num(ns.Value(GetNumQuestChoices)) or 0) < 2 then waiting = false return end
   local db = ns.db
-  if not (db.highlightBest or db.autoPickBest) then return end
+  if not db.highlightBest then return end
 
   local index, value, link, pending = FindBest()
   waiting = pending
   if pending then return end -- retried on ITEM_DATA_LOAD_RESULT
   if not index then return end -- all choices worth nothing
 
-  -- (1.3.5) repeatable quests are never turned in automatically (Quests.lua): the marker only
-  if db.autoPickBest and ns.Active("autoTurnIn") and not ns.IsPaused() and not pausedAtOpen and not (ns.SkipAutoTurnIn and ns.SkipAutoTurnIn(ns.Value(GetQuestID)))
-      and not (ns.QuestCostsGold and ns.QuestCostsGold(ns.Value(GetQuestID))) then -- (Questdon review 1) no gold paid
-    if ns.BlizzardDialogOpen and ns.BlizzardDialogOpen() then ns.WhenNoDialog("reward", Evaluate) return end -- (05.11.2026)
-    ns._rewardAuto = true -- (1.3.8) Questdon chose: not a player's pick
-    if ns.NoteAutoStep then ns.NoteAutoStep("GetQuestReward(pick)") end
-    GetQuestReward(index)
-    return
-  end
+  -- (10.11.2026) the automatic pick is gone (off for everybody since 28.10.2026, no switch): the marker only
   if db.highlightBest then
     ShowMarker(GetRewardButton(index))
     ns.Print(L["Most valuable reward: %s (%s)"]:format(link, ns.Money(value)))
@@ -97,8 +88,6 @@ end
 local Snapshot -- (1.3.8, below)
 ns.On("QUEST_COMPLETE", function()
   open = true
-  ns._rewardAuto = nil
-  pausedAtOpen = ns.IsPaused() -- (Questdon review 4) Shift held when the window opened: no pick, also not later
   if Snapshot then pcall(Snapshot) end
   -- Wait one frame so Blizzard has laid out the reward buttons.
   ns.After(0, Evaluate)
@@ -449,10 +438,8 @@ ns.RecordRewardPick = Record -- (tests)
 ns.On("QUEST_TURNED_IN", function(_, questID)
   local s = snap
   snap = nil
-  local auto = ns._rewardAuto
-  ns._rewardAuto = nil
   questID = ns.Num(questID)
-  if not (s and questID and s.q == questID) or auto then return end
+  if not (s and questID and s.q == questID) then return end
   ns.After(1.5, function()
     local count = (C_Item and C_Item.GetItemCount) or GetItemCount
     if not count then return end

@@ -228,7 +228,7 @@ local FAR_YARDS = 150
 local function UpdateLook()
   if not (button and button.itemID and button:IsShown()) then return end
   local far = false
-  if ns.db.itemButtonDim ~= false and button.questID and ns.QuestNearestPoint then
+  if button.questID and ns.QuestNearestPoint then
     local _, dist = ns.QuestNearestPoint(button.questID)
     far = type(dist) == "number" and dist > FAR_YARDS
   end

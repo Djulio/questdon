@@ -1,5 +1,17 @@
 # Changes
 
+## 1.6.0
+- **Waypoints with `/way`:** `/way 45.2 61.8 Text` sets a marker on the world map and minimap, and the arrow leads you there with your text under it. A zone can go in front (`/way Westfall 45 58`), several `/way` in one line set several, and `/way` alone opens a window to paste a whole list. A waypoint goes when you reach it; right-click a marker to remove it, the ones of the zone or all (`/way clear`). The size of the markers is set under Map, More settings. With TomTom installed, use `/qd way`.
+- **Fewer options:** the settings are down from 56 to 46 controls. Things nobody switched off are fixed now, and a few rarely used ones moved to "More settings".
+- **Lighter:** two test tools from the first weeks are gone (`/qd xpcheck`, `/qd nettest`), and the TomTom waypoint only works while it is switched on.
+- **Next to Questie:** Questdon does everything itself; the option to leave quest givers to Questie is gone.
+- **The game's markers on the world map stay hidden:** with "Hide the game's markers on the world map" on, they no longer flash up for a moment, also in combat.
+- **Quest list grows downwards:** after moving the quest list, it keeps its top edge and grows down instead of from the middle.
+- **Quest book:** a click on the quest giver shows a marker on the map that goes when you close the map; Shift-click also sets the arrow.
+- **Fixed:** taking quest items out of the bank, mail, a trade or the auction house no longer counts as a place where they are found.
+- **Fixed:** the minimap pins are no longer gone for a moment when they are rebuilt.
+- Needs DonData 1.2.6.
+
 ## 1.5.6
 - **Turn-in "?" on the world map:** a finished quest gets its "?" again where the game draws its own marker only for some of your quests (it was missing in Thelsamar), and also when the game's option "Show Quest POIs & Blobs" is off.
 - **The arrow points straight at the target:** no more detours around mountains or to cave entrances, and no yellow dots on the map and minimap.

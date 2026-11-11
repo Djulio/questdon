@@ -3,11 +3,6 @@ local L = ns.L
 
 local category
 
-local function QuestieBlocks(key)
-  return function()
-    return ns.QuestieHandles and ns.QuestieHandles(key) and "Questie" or nil
-  end
-end
 local function RefreshPins() if ns.RefreshPins then ns.RefreshPins() end end
 local function RefreshTargetButton() if ns.RefreshTargetButton then ns.RefreshTargetButton() end end
 local function SyncWaypoint() if ns.SyncWaypoint then ns.SyncWaypoint() end end
@@ -15,7 +10,6 @@ local function RefreshItemButton() if ns.RefreshItemButton then ns.RefreshItemBu
 local function ApplyArrow() if ns.ApplyArrow then ns.ApplyArrow() end end
 local function Pixels(v) return ("%d"):format(v) end
 local function Levels(v) return ("%d"):format(v) end
-local function Upcoming(v) v = math.floor((tonumber(v) or 0) + 0.5) return v == 0 and L["off"] or ("+%d"):format(v) end
 local function ArrowLook() if ns.ApplyArrow then ns.ApplyArrow() end end
 local function XPBarLook() if ns.ApplyXPBarLook then ns.ApplyXPBarLook() end end
 local function UpdateXPBar() if ns.UpdateXPBar then ns.UpdateXPBar() end end
@@ -29,22 +23,16 @@ local SMIN, SMAX = ns.Style.SCALE_MIN, ns.Style.SCALE_MAX
 local PAGES = {
   { title = "Quests and automation", tip = "Accepting, turning in, rewards, chains, group, dungeons and tooltips.", items = {
     { header = "Accept and turn in" },
-    { key = "autoAccept", name = "Auto accept quests", tip = "Accepts offered quests and escort confirmations. Hold Shift to pause.", blockedBy = QuestieBlocks("autoAccept") },
-    { key = "skipTrivial", name = "Ignore grey quests", tip = "Do not auto accept quests that are trivial for your level.", parent = "autoAccept" },
-    { key = "autoTurnIn", name = "Auto turn in quests", tip = "Turns in completed quests. Quests with several reward choices or a gold cost, and repeatable quests, are left to you.", blockedBy = QuestieBlocks("autoTurnIn") },
-    { header = "Rewards" },
-    { key = "suggestReward", name = "Suggest a reward for your class", tip = "A green frame marks the reward players of your class pick most. Until enough players have picked, it marks the one with armor and stats for your class that beats what you wear." },
+    { key = "autoAccept", name = "Auto accept quests", tip = "Accepts offered quests and escort confirmations. Hold Shift to pause." },
+    { key = "autoTurnIn", name = "Auto turn in quests", tip = "Turns in completed quests. Quests with several reward choices or a gold cost, and repeatable quests, are left to you." },
     { header = "Chains and group" },
     { key = "shareQuests", name = "Share new quests with group", tip = "Shares every quest you accept with your group, if it can be shared." },
-    { header = "Tooltips" },
-    { key = "unitTooltips", name = "Quest info in mob and NPC tooltips", tip = "Mouse over a mob: shows which of your quests it counts for and your progress. Mouse over an NPC: shows quests it has for you. With 'Questie has priority' on, Questdon adds nothing where Questie's tooltips already show the quest." },
   } },
   { title = "Map", tip = "Available quests, quest mobs and learned spots on the world map, the minimap and nameplates.", items = {
     -- (1.23) grouped by what is shown; the level options apply to the world map, minimap, nameplates and panel alike
     { header = "Available quests" },
-    { key = "availablePins", name = "Show available quests on the map", tip = "Yellow ! for quests you can pick up now: level, faction, race, class and previous quests are checked. Data from All The Things plus what Questdon learned. Skipped where Questie or Forever Quest Pins already show the quest.", onChange = RefreshPins },
+    { key = "availablePins", name = "Show available quests on the map", tip = "Yellow ! for quests you can pick up now: level, faction, race, class and previous quests are checked. Data from All The Things plus what Questdon learned. Skipped where Forever Quest Pins already shows the quest.", onChange = RefreshPins },
     { key = "showLowLevel", name = "Also show low level quests", tip = "Shows quests far below your level too.", parent = "availablePins", onChange = RefreshPins },
-    { key = "lowLevelRange", kind = "slider", name = "Low level from levels below yours", tip = "A quest counts as low level when its level is at least this many levels below yours. Low level quests are hidden on the map, the minimap, the nameplates and in the dungeon list unless 'Also show low level quests' is on. Default 10.", min = 3, max = 20, step = 1, format = Levels, parent = "availablePins", onChange = RefreshPins },
     -- (1.24) replaces "Quests without a level count as low level" (the setting is dropped, see Core.lua)
     -- (1.0) event quests and "confirmed only"
     -- (1.25) no second "!" where the game draws its own
@@ -52,12 +40,11 @@ local PAGES = {
     { key = "objectivePins", name = "Show quest mobs and objectives on the map", tip = "Pins where the mobs and objects for your unfinished quest objectives are, one colour per quest. Mouse over for details.", onChange = RefreshPins },
     { key = "objectivePinsTrackedOnly", name = "Only for tracked quests", tip = "Shows these pins only for the quest picked in the quest list and the quests watched in the quest log, so the map stays clear.", parent = "objectivePins", onChange = RefreshPins },
     { key = "objectiveIcons", name = "Symbols instead of dots", tip = "Quest mobs, loot, named mobs, objects to click, places to reach and the places to use a quest item get their own symbol in the quest's colour, on the world map and the minimap. Spots close together become one symbol.", parent = "objectivePins", onChange = function() RefreshPins() if ns.RefreshNameplates then ns.RefreshNameplates() end end },
-    { key = "objectiveAreas", name = "Areas under the symbols", tip = "On the world map a group of spots shows its area in the quest's colour, like the game's own quest areas.", parent = "objectiveIcons", onChange = RefreshPins },
-    { key = "walkLines", name = "Routes of walking NPCs", tip = "Some quest givers and quest mobs walk a route. A red dotted line on the world map and minimap shows where they walk.", onChange = function() if ns.RefreshWalks then ns.RefreshWalks() end end },
     { key = "hideGamePOIs", name = "Hide the game's quest markers on the world map", tip = "Takes the game's own round objective markers and blue quest areas off the world map, so only Questdon's symbols and areas are shown. The game's markers on the minimap stay. Off by default.", onChange = function() if ns.ApplyGamePOIs then ns.ApplyGamePOIs() end end },
     { key = "mapPinScale", kind = "slider", name = "Map pin size", tip = "Size of all Questdon pins on the world map: quest givers, turn-ins, objectives and dungeon entrances. 100 % is the normal size.", min = 0.25, max = 2, step = 0.05, onChange = RefreshPins },
     { header = "Minimap and nameplates" },
     { key = "minimapPinScale", kind = "slider", name = "Minimap pin size", tip = "Size of all Questdon pins on the minimap. 100 % is the normal size.", min = 0.25, max = 2, step = 0.05, parent = "minimapPins", onChange = RefreshPins },
+    { key = "wayPinScale", kind = "slider", name = "Waypoint pin size", tip = "Size of the /way waypoint pins on the world map and the minimap, on top of the two pin sizes. 100 % is the normal size.", min = 0.5, max = 3, step = 0.1, onChange = RefreshPins },
     { key = "minimapPins", name = "Show the pins on the minimap too", tip = "The same pins as on the world map (available quests, quest mobs and objectives, learned turn-ins) for the zone you are in, also on the minimap. The options above apply there too. A quest giver with several quests is one pin. Mouse over for details, click to point the arrow there.", onChange = RefreshPins },
     { key = "minimapButton", name = "Minimap button", tip = "A Questdon button on the edge of the minimap. Left click: quest book. Right click: a menu with the most used switches and all options. Mouse over: quests here, dungeon quests and your quest log. Drag it around the minimap.", onChange = function() if ns.RefreshMinimapButton then ns.RefreshMinimapButton() end end },
     { key = "nameplateIcons", name = "Quest mob pins on nameplates", tip = "A pin in the quest's colour above the nameplate of mobs of your open objectives. Quest givers and turn-ins keep the game's own ! and ?. Nameplates must be switched on in the game.", onChange = function() if ns.RefreshNameplates then ns.RefreshNameplates() end end },
@@ -66,7 +53,6 @@ local PAGES = {
     { key = "dungeonPins", name = "Dungeon entrances on the map", tip = "The entrance of every dungeon and raid Questdon knows, on the world map. Mouse over: level range and your quests there. Click: the dungeon in the quest book. Right-click: the arrow leads you there.", onChange = RefreshPins },
     -- (07.11.2026, Discord tP: too many marks on the minimap) the minimap's own "tracked only"; the world map stays
     { key = "minimapTrackedOnly", name = "Only tracked quests on the minimap", tip = "Quest mobs and objectives on the minimap only for the quest picked in the quest list and the quests watched in the quest log. The world map keeps its own setting. The ! of quests to pick up stay.", parent = "minimapPins", onChange = RefreshPins },
-    { key = "dungeonPinsMinimap", name = "Dungeon entrances on the minimap", tip = "The same entrances on the minimap, but only when you are within about 300 yards, so the edge of the minimap stays clear.", parent = "minimapPins", onChange = RefreshPins },
     -- (30.10.2026, Daniel 27.10.) inns, auction houses, flight masters and banks
     { header = "Towns" },
     { key = "servicePins", name = "Inns, auction houses, flight masters and banks on the map", tip = "Their symbols on the world map, for your faction and the neutral towns. Mouse over: what it is. Click: the arrow leads you there.", onChange = function() if ns.RefreshServicePins then ns.RefreshServicePins() end end },
@@ -139,7 +125,6 @@ local PAGES = {
     { key = "arrow", name = "Show window", status = GuideStatus, tip = "Arrow with distance to the quest you picked in the quest list or track in the quest log (nearest objective spot, or the turn-in when it is finished). Left click a Questdon map pin to point the arrow there. Drag to move, right click to drop a clicked target. /qd arrow toggles it.", onChange = function(...) ns.db.arrowAuto = nil if ns.db.arrow then ns.db.noWay = nil end ArrowLook(...) end }, -- (review 4) your choice
     { key = "arrowPlain", name = "No background and frame", tip = "Hides the plate behind the arrow's text and its frame: only the arrow and the writing stay. The background opacity below then does nothing.", parent = "arrow", onChange = ArrowLook },
     { key = "arrowLocked", name = "Lock window", tip = "The arrow can no longer be dragged.", parent = "arrow" },
-    { key = "arrowNext", name = "Move on to the next quest by itself", tip = "When no quest is tracked (after a turn-in, or after you arrived at a clicked target), the arrow points to the nearest turn-in of a finished quest, or to an open objective close by when that is nearer. Click the arrow to put it aside until your quest log changes.", parent = "arrow", onChange = function() ns.UpdateArrowTarget() end },
     { key = "arrowScale", kind = "slider", name = "Size", tip = "Size of the direction arrow and its text.", min = SMIN, max = SMAX, step = 0.05, parent = "arrow", onChange = ArrowLook },
     { kind = "button", name = "Reset position", button = "Reset", tip = "Puts the arrow back to its default place.", onClick = function() if ns.ResetArrowPosition then ns.ResetArrowPosition() end end },
     { header = "XP bar" },
@@ -147,13 +132,12 @@ local PAGES = {
     { key = "xpBarLocked", name = "Lock window", tip = "When unlocked, drag the bar with the left mouse button.", parent = "xpBar" },
     { key = "xpBarScale", kind = "slider", name = "Size", tip = "Overall size of the XP bar including the text.", min = SMIN, max = SMAX, step = 0.05, parent = "xpBar", onChange = UpdateXPBar },
     { kind = "button", name = "Reset position", button = "Reset", tip = "Puts the XP bar back to its default place.", onClick = function() if ns.ResetXPBarPosition then ns.ResetXPBarPosition() end end },
-    { key = "hideBlizzardXP", name = "Hide Blizzard's XP bar", tip = "While this bar is shown, the game's own XP bar at the bottom of the screen is hidden. Your action bars do not move. A tracked reputation bar stays visible.", parent = "xpBar", onChange = UpdateXPBar },
     { key = "xpBarText", name = "Text under the bar", tip = "Level, percent, quest XP, rested XP, XP per hour and time to the next level as text.", parent = "xpBar", onChange = UpdateXPBar },
     { key = "xpBarWidth", kind = "slider", name = "Width", tip = "Width of the XP bar.", min = 200, max = 1600, step = 10, format = Pixels, parent = "xpBar", onChange = UpdateXPBar },
   } },
   { title = "Signals", tip = "Sound and message when something is done, and the nearest quest (/qd next).", items = {
     { header = "When something is done" },
-    { key = "notifySound", name = "Sound when done", tip = "Plays a sound when a quest objective or a whole quest is done. With 'Questie has priority' on, Questdon stays quiet where Questie plays its own sound." },
+    { key = "notifySound", name = "Sound when done", tip = "Plays a sound when a quest objective or a whole quest is done." },
     { key = "notifyText", name = "Message when done", tip = "Shows a message in the middle of the screen when an objective or quest is done." },
   } },
   { title = "Comfort", tip = "Merchant, loot, quest item button, targeting and waypoints.", items = {
@@ -167,43 +151,82 @@ local PAGES = {
     { key = "useGuildRepair", name = "Use guild bank for repairs", tip = "Tries the guild bank first, then your own gold.", parent = "autoRepair" },
     { header = "Loot and items" },
     { key = "fastLoot", name = "Fast loot", tip = "Loots everything instantly when auto loot applies. Items that bind on pickup and quest items are left to the game's own auto loot." },
-    { key = "questItemButton", name = "Quest item button", tip = "Shows a button for the usable item of your tracked quest. Shift-drag to move. Key binding under Key Bindings > AddOns.", blockedBy = QuestieBlocks("questItemButton"), onChange = RefreshItemButton },
+    { key = "questItemButton", name = "Quest item button", tip = "Shows a button for the usable item of your tracked quest. Shift-drag to move. Key binding under Key Bindings > AddOns.", onChange = RefreshItemButton },
     { header = "Targeting and waypoints" },
     { key = "targetButton", name = "Target button", tip = "Shows a button that targets a mob of your tracked quest with one click. Questdon learns the mob names from nameplates and your target, so a mob must have been seen once. Shift-drag to move. Key binding under Key Bindings > AddOns.", onChange = RefreshTargetButton },
     { key = "exportTomTom", name = "Set TomTom waypoint", tip = "Also sets the spot the arrow points at as a TomTom waypoint. Needs TomTom.", onChange = SyncWaypoint },
   } },
-  { title = "Questie", tip = "How Questdon works together with Questie.", items = {
-    { header = "Working together" },
-    { key = "questieFirst", name = "Questie has priority", tip = "Off by default. On: if Questie already does something (auto accept, auto turn-in, quest item buttons in its tracker, completion sounds, nameplate icons, tooltips), Questdon steps back there. /qd questie shows the current state.", onChange = function() RefreshItemButton() RefreshPins() end },
-  } },
 }
+
+-- (10.11.2026, Daniel: fewer switches) areas, dungeon entrances on the minimap and the routes of walking NPCs lost
+-- their own switches: they follow the switch they belong to, here and with the map styles (Setup.lua)
+do
+  local function Walks(db) db.walkLines = (db.availablePins or db.objectivePins) and true or false if ns.RefreshWalks then ns.RefreshWalks() end end
+  local FOLLOW = {
+    objectiveIcons = function(db) db.objectiveAreas = db.objectiveIcons and true or false end,
+    dungeonPins = function(db) db.dungeonPinsMinimap = db.dungeonPins and true or false end,
+    availablePins = Walks, objectivePins = Walks,
+  }
+  ns.OPTION_FOLLOW = FOLLOW -- (tests)
+  for _, page in ipairs(PAGES) do
+    for _, item in ipairs(page.items) do
+      local follow, inner = FOLLOW[item.key], item.onChange
+      if follow then
+        item.onChange = function(...)
+          if ns.db then follow(ns.db) end
+          if inner then return inner(...) end
+        end
+      end
+    end
+  end
+end
 
 -- (28.10.2026, Daniel: "Sollten wir einfach Sachen vorgeben, weil wir sind die Entwickler, nicht jeder muss alles
 -- einstellen können") options we decide: not in the options window, their default value (Core.lua ns.defaults) is set
 -- once for everybody (Core.lua fixedV1313). The features stay; only the switch is gone.
 ns.FIXED_OPTIONS = {
   -- map: which quests count, how pins are drawn
-  "showNoLevel", "hideEventQuests", "hideRepeatable", "confirmedOnly", "skipGameGivers", "clusterPins", "upcomingLevels",
+  "showNoLevel", "hideEventQuests", "hideRepeatable", "confirmedOnly", "skipGameGivers",
   "thinObjectives", "objectivePinSize", "pinsOnlyUnknown",
   -- quest list and arrow: the background follows "No background and frame", the rest is how the way is shown
   "trackerDock", "trackerHideBlizz", "trackerAlpha", "trackerCombatFade", "arrowAlpha", "arrowCombatFade",
-  "nextConfirmedOnly", "pathDots", "arrowCorpse", "exportBlizzardWaypoint",
+  "nextConfirmedOnly", "pathDots", "arrowCorpse",
   -- quests, XP bar, comfort, sharing
-  "highlightBest", "autoPickBest", "chainHint", "partyProgress", "dungeonHint",
+  "highlightBest", "chainHint", "partyProgress", "dungeonHint",
   "xpBarAlpha", "xpBarCombatFade", "xpBarHeight", "artInXPPlace", "ownRepBar",
   "starterNotice", "itemButtonScale", "journalStory", "shareTimes",
+  -- (10.11.2026, Daniel: the whole proposal, 56 switches down to 47) second round, set once with fixedV1110
+  "arrowNext", "suggestReward", "hideBlizzardXP", "lowLevelRange", "skipTrivial", "unitTooltips",
+  "objectiveAreas", "walkLines", "dungeonPinsMinimap",
 }
+local FIXED_1110 = { "arrowNext", "suggestReward", "hideBlizzardXP", "lowLevelRange", "skipTrivial", "unitTooltips" }
 
 -- (28.10.2026) once: the fixed options to their default; while "Only collect and share data" is on, into the values it
 -- gives back, so that mode keeps everything off
+-- (10.11.2026) the second round with its own mark; the three that belong to another switch take its value, so a map
+-- style stays what it was ("Only the game's map" keeps the routes and the minimap entrances off)
 function ns.ApplyFixedOptions(db)
-  if type(db) ~= "table" or db.fixedV1313 then return end
+  if type(db) ~= "table" then return end
   local prev = type(db.dataOnlyPrev) == "table" and db.dataOnlyPrev or nil
-  for _, k in ipairs(ns.FIXED_OPTIONS) do
-    local v = ns.defaults[k]
+  local function Get(k)
+    local v = db[k]
+    if prev and prev[k] ~= nil then v = prev[k] if v == "nil" then v = nil end end
+    return v
+  end
+  local function Put(k, v)
     if prev and prev[k] ~= nil then prev[k] = v == nil and "nil" or v else db[k] = v end
   end
-  db.fixedV1313 = true
+  if not db.fixedV1313 then
+    for _, k in ipairs(ns.FIXED_OPTIONS) do Put(k, ns.defaults[k]) end
+    db.fixedV1313 = true -- the second round follows at once (a store from before 28.10.2026 keeps its map style too)
+  end
+  if not db.fixedV1110 then
+    for _, k in ipairs(FIXED_1110) do Put(k, ns.defaults[k]) end
+    Put("objectiveAreas", Get("objectiveIcons") and true or false)
+    Put("dungeonPinsMinimap", Get("dungeonPins") and true or false)
+    Put("walkLines", (Get("availablePins") or Get("objectivePins")) and true or false)
+    db.fixedV1110 = true
+  end
 end
 
 local function Status()
@@ -217,7 +240,7 @@ local function Status()
   if ns.AddOnLoaded("Questie") and not (ns.QuestieOn and ns.QuestieOn()) then
     lines[#lines + 1] = L["Questie is switched off."] -- (Questdon review 3)
   elseif ns.AddOnLoaded("Questie") then
-    lines[#lines + 1] = ns.db.questieFirst and L["Questie is loaded and has priority."] or L["Questie is loaded, priority is off."]
+    lines[#lines + 1] = L["Questie is loaded."]
   else
     lines[#lines + 1] = L["Questie is not loaded."]
   end

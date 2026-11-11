@@ -333,7 +333,7 @@ local function CheckArea(t)
     end
   end
   local pick, pickDist, far = best, bestDist, false
-  if best and (curDist or bestDist) > CLUSTER_FAR and not area.inside and ns.db.arrowClusters ~= false then
+  if best and (curDist or bestDist) > CLUSTER_FAR and not area.inside then
     local c, cd = Cluster(t, pc, pn, pw)
     if c then pick, pickDist, far = c, cd, true
     elseif cd == true then pick = nil end -- the current target is still as good: kept

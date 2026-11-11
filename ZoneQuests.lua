@@ -181,8 +181,9 @@ local function Focus(e, openMap)
     m, x, y, what = QuestSpot(e)
   end
   if not m then ns.Print(L["No position known for %s."]:format(ns.QuestTitle(e.questID))) return end
-  ns.zoneFocus = { questID = e.questID, mapID = m, x = x, y = y, group = e.group, text = e.text, what = what }
-  if ns.SetArrowTarget then
+  ns.zoneFocus = { questID = e.questID, mapID = m, x = x, y = y, group = e.group, text = e.text, what = what,
+    look = e.look or nil }
+  if ns.SetArrowTarget and not e.noArrow then
     ns.EnsureArrow() -- (review 3) not a second arrow next to the list's compass
     ns.SetArrowTarget(m, x, y, ns.QuestTitle(e.questID))
   end
@@ -199,9 +200,21 @@ end
 
 -- (06.11.2026, Daniel: dungeon quests, "den Questgeber (wenn außerhalb) dem namen anklicken ... dann soll er auf der
 -- zonenmap angezeigt werden") the giver's spot on its zone map: map mark, arrow, the world map opened there
-function ns.ShowQuestGiver(questID)
+-- (10.11.2026, Daniel: "optisch auf der Karte angezeigt ... und der Marker verschwindet, wenn ich die Karte wieder
+-- schließe") the click shows the marker only, for this look at the map: it goes when the map closes (ns.MapClosed,
+-- from the map's data provider). With Shift held the arrow points there too, and the marker stays as before.
+function ns.ShowQuestGiver(questID, withArrow)
+  if withArrow == nil then withArrow = ns.True(ns.Value(IsShiftKeyDown)) end
   local group, text = ns.ZoneQuestStatus(questID)
-  Focus({ questID = questID, group = group or "done", text = text, atStart = true }, true)
+  Focus({ questID = questID, group = group or "done", text = text, atStart = true,
+    noArrow = not withArrow, look = not withArrow }, true)
+end
+function ns.MapClosed()
+  if not (ns.zoneFocus and ns.zoneFocus.look) then return false end
+  ns.zoneFocus = nil
+  if ns.RefreshMinimapPins then ns.RefreshMinimapPins(true) end
+  ns.UpdateZoneQuests(true)
+  return true
 end
 
 ---------------------------------------------------------------------------

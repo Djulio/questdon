@@ -33,13 +33,6 @@ local registered = false
 
 local function Enabled() return ns.db and ns.db.nameplateIcons end
 
-local function QuestieDrawsNameplates(questID)
-  if not (ns.db.questieFirst and ns.QuestieOn()) then return false end -- (review 2) Questie switched off draws nothing
-  local p = type(Questie) == "table" and type(Questie.db) == "table" and Questie.db.profile
-  if type(p) ~= "table" or p.nameplateEnabled == false then return false end
-  return ns.QuestieKnows and ns.QuestieKnows(questID) == true
-end
-
 -- Is objective <index> of a quest in the log still open (client state)?
 local function ObjectiveOpen(questID, index)
   if not ns.InQuestLog(questID) or ns.IsQuestComplete(questID) or ns.IsQuestFailed(questID) then return false end
@@ -64,7 +57,7 @@ function ns.NameplateMark(creatureID)
   local objectives = ns.CreatureQuestIndex(creatureID)
   for _, entry in ipairs(objectives or {}) do
     local questID, index = ns.ObjectiveEntry(entry)
-    if ObjectiveOpen(questID, index) and not QuestieDrawsNameplates(questID) then
+    if ObjectiveOpen(questID, index) then
       m = { kind = "objective", questID = questID, index = index, creature = creatureID }
       break
     end

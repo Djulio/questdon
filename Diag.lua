@@ -215,10 +215,8 @@ function ns.BuildDiag()
   end)
   Probe(out, "waypoint export", function()
     local w = ns.WaypointState and ns.WaypointState() or {}
-    return ("blizzard %s (pin set %s), TomTom %s (%s, waypoint set %s); C_Map.SetUserWaypoint %s, TomTom %s"):format(
-      ns.db.exportBlizzardWaypoint and "on" or "off", w.blizzard and "yes" or "no",
-      ns.db.exportTomTom and "on" or "off", type(TomTom) == "table" and "installed" or "not installed", w.tomtom and "yes" or "no",
-      (C_Map and C_Map.SetUserWaypoint) and "present" or "missing", type(TomTom) == "table" and "present" or "missing")
+    return ("TomTom %s (%s, waypoint set %s)"):format(
+      ns.db.exportTomTom and "on" or "off", type(TomTom) == "table" and "installed" or "not installed", w.tomtom and "yes" or "no")
   end)
   -- (1.25) arrow: nearest spot and objective area of the tracked quest
   Probe(out, "arrow area", function()
@@ -293,8 +291,7 @@ function ns.BuildDiag()
     if not ns.AddOnLoaded("Questie") then return "not loaded" end
     local get = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
     local v = ns.Value(get, "Questie", "Version")
-    return ("loaded %s, QuestieDB %s, priority %s"):format(type(v) == "string" and v or "?",
-      YesNo(type(LibQuestieDB) == "table"), YesNo(ns.db.questieFirst))
+    return ("loaded %s, QuestieDB %s"):format(type(v) == "string" and v or "?", YesNo(type(LibQuestieDB) == "table"))
   end)
   Probe(out, "ATT data", function()
     local meta = ns.ATT_META or {}
@@ -343,7 +340,6 @@ function ns.BuildDiag()
       Count(ns.ATT_DUNGEONS), inLog, toTake, tostring(ns.CurrentDungeon() or "none"))
   end)
   Probe(out, "group progress", function() return ns.PartyDiag() end)
-  Probe(out, "net test", function() return ns.NetDiag and ns.NetDiag() or "nil" end)
   Probe(out, "sharing", function() return ns.ShareDiag and ns.ShareDiag() or "nil" end)
   Probe(out, "play times", function() return ns.TimingDiag and ns.TimingDiag() or "nil" end)
   Probe(out, "fast loot", function() -- (1.1)
