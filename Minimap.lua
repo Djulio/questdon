@@ -381,7 +381,7 @@ local function Retint(b)
 end
 local function Look(b, pin, scale)
   -- (Daniel 26.10.) the player's own size for all minimap pins, 25 to 200 %
-  local m = math.max(0.25, math.min(2, tonumber(ns.db and ns.db.minimapPinScale) or 0.85)) -- (04.11.2026, Era-Test) 85 % by default
+  local m = math.max(0.25, math.min(2, tonumber(ns.db and ns.db.minimapPinScale) or 1)) -- (12.11.2026, Daniel) 100 % by default
   local function R(v) return math.max(3, math.floor(v * m + 0.5)) end
   local DOT_SIZE = R(DOT_SIZE)
   b.pin = pin

@@ -16,6 +16,9 @@ local L = ns.L
 --   /way <zone> 45.2 61.8 [text]   a zone by its name (or the start of it), or #<uiMapID>
 --   /way                            the window to paste many lines
 --   /way clear
+-- (13.11.2026, Daniel: after an update's /reload "die waypoints sind verschwunden", kept per character) The list is
+-- QuestdonCharDB.ways itself ({ mapID, x, y, label } each), so it survives a /reload and a logout; after a login the
+-- markers are back, the arrow is not taken (a click on a marker takes it).
 -- With TomTom loaded "/way" stays TomTom's; "/qd way ..." always works.
 ---------------------------------------------------------------------------
 local WAY_NEAR, WAY_MAX = 15, 100
@@ -96,7 +99,8 @@ function ns.ClearWays(reason)
   if #ways == 0 then return false end
   local onWay = ArrowOnWay()
   stats.removed, stats.last = stats.removed + #ways, reason or "?"
-  ways, lead = {}, nil
+  for i = #ways, 1, -1 do ways[i] = nil end -- the same table stays: it is the saved one
+  lead = nil
   if ticker then ticker:Cancel() ticker = nil end
   if onWay and ns.ClearArrow then
     ns.ClearArrow()
@@ -156,6 +160,25 @@ local function Add(mapID, x, y, label)
   stats.set = stats.set + 1
   if not ticker then ticker = ns.NewTicker(1, Check) end
   return w
+end
+
+-- The saved waypoints of this character come back (at the start), and from here on the list is the saved one.
+-- Returns how many came back.
+function ns.LoadWays()
+  local cdb = ns.charDB
+  if type(cdb) ~= "table" then return 0 end
+  local saved, n = cdb.ways, 0
+  if type(saved) == "table" and saved ~= ways then
+    for _, s in ipairs(saved) do
+      if type(s) == "table" and Add(s.mapID, s.x, s.y, s.label) then n = n + 1 end
+    end
+  end
+  cdb.ways = ways
+  if n > 0 then
+    lead = lead or Nearest()
+    RefreshViews()
+  end
+  return n
 end
 
 function ns.SetWay(mapID, x, y, label)
@@ -360,6 +383,7 @@ end
 
 -- "/way" is ours only when TomTom is not there (it has the same command)
 ns.OnInit(function()
+  ns.LoadWays()
   if ns.AddOnLoaded and ns.AddOnLoaded("TomTom") or type(rawget(_G, "TomTom")) == "table" then return end
   SLASH_QUESTDONWAY1 = "/way"
   SlashCmdList.QUESTDONWAY = ns.Guard("way", function(msg) ns.WayCommand(msg) end)

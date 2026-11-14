@@ -8,6 +8,7 @@ local L = ns.L
 -- objective counters. Nothing else, no names in the payload.
 --
 --   "R1"                         please send me your state
+--   "A1:<questID>"               (12.11.2026) I wrote the party chat line for this quest (Announce.lua)
 --   "S1:<seq>:<i>:<n>:<payload>" part i of n of a full state, payload:
 --                                id,state,f/r,f/r;id,state,...  (state 0 open, 1 complete, 2 failed)
 --
@@ -57,6 +58,7 @@ local function Locked()
   if not ok or v == nil then return false end
   return not ns.Usable(v) or v == true -- unreadable: better wait
 end
+ns.PartyLocked = Locked -- (12.11.2026) Announce.lua
 
 -- Name as the roster shows it: "Name" on the own realm, "Name-Realm" else.
 local function Short(name)
@@ -89,17 +91,43 @@ local function UnitFullName(unit)
   return Short(n)
 end
 
+-- (12.11.2026, Daniel: "Partyabgleich in Klassenfarben der Spieler und nur den Vornamen, das muss dann kurz gehalten
+-- werden") the class of each member, read with the roster; shown names are the first name in the class colour
+local classOf = {}
+local function NoteClass(unit, name)
+  local ok, _, class = pcall(UnitClass, unit)
+  if ok and type(class) == "string" and ns.Usable(class) and class ~= "" then classOf[name] = class end
+end
+
 local function Roster()
   local set = {}
   if not ns.True(ns.Value(IsInGroup)) then return set end
   local raid = ns.True(ns.Value(IsInRaid))
   local n = GroupSize()
   for i = 1, raid and n or math.max(n - 1, 0) do
-    local name = UnitFullName((raid and "raid" or "party") .. i)
-    if name then set[name] = true end
+    local unit = (raid and "raid" or "party") .. i
+    local name = UnitFullName(unit)
+    if name then set[name] = true NoteClass(unit, name) end
   end
   return set
 end
+
+-- "Mae Wipeborn" (Forever) and "Tova-Realm" become "Mae" and "Tova".
+function ns.PartyFirstName(name)
+  if type(name) ~= "string" or not ns.Usable(name) then return "?" end
+  return name:match("^([^%s%-]+)") or name
+end
+-- The first name in the member's class colour (plain while the class is unknown).
+function ns.PartyNameText(name)
+  local first = ns.PartyFirstName(name)
+  local class = classOf[name]
+  if not class then return first end
+  local K = LibStub and LibStub("DonCore-1.0", true)
+  K = K and K.Get and K:Get("Kit", 16)
+  if K and K.ClassText then return K.ClassText(class, first) end
+  return first
+end
+function ns.PartyMyName() return UnitFullName("player") end
 
 ---------------------------------------------------------------------------
 -- Own state
@@ -129,7 +157,15 @@ function ns.PartyStateString()
   return table.concat(entries, ";")
 end
 
-local function Send(msg, channel)
+local Send
+-- (12.11.2026) Announce.lua: "A1:<questID>", I told the group about this quest (the others stay silent)
+function ns.PartySend(msg)
+  if not (ns.db and ns.db.partyProgress and registered) then return false end
+  local channel = Channel()
+  if not channel or Locked() then return false end
+  return Send(msg, channel)
+end
+function Send(msg, channel)
   if not (C_ChatInfo and type(C_ChatInfo.SendAddonMessage) == "function") then return false end
   local ok, result = pcall(C_ChatInfo.SendAddonMessage, PREFIX, msg, channel)
   if not ok then return false end
@@ -207,12 +243,17 @@ local function Parse(payload)
 end
 
 local refreshQueued = false
+ns.partyGen = 0 -- (12.11.2026) counts every change of the group's data: part of the quest list's signature
+local gameCache -- (12.11.2026) the game's own data, read below
 local function Changed()
+  ns.partyGen = ns.partyGen + 1
+  if gameCache and next(gameCache) then wipe(gameCache) end
   if refreshQueued then return end
   refreshQueued = true
   ns.After(0.5, function()
     refreshQueued = false
     if ns.RefreshPinsIfChanged then ns.RefreshPinsIfChanged() end
+    if ns.UpdateTracker then ns.UpdateTracker() end -- (12.11.2026) the group line of the quest card (signature: partyGen)
   end)
 end
 
@@ -226,6 +267,11 @@ local function OnMessage(_, prefix, text, _, sender)
     stats.requests = stats.requests + 1
     force = true
     Queue(1 + math.random() * 2) -- spread the answers of several members
+    return
+  end
+  local told = text:match("^A1:(%d+)$")
+  if told then
+    if ns.AnnounceHeard then ns.AnnounceHeard(tonumber(told), name) end
     return
   end
   local s, i, n, payload = text:match("^S1:(%d+):(%d+):(%d+):(.*)$")
@@ -242,7 +288,17 @@ local function OnMessage(_, prefix, text, _, sender)
   end
   if buf.count == n then
     incoming[name] = nil
-    members[name] = { quests = Parse(table.concat(buf.parts, "", 1, n)), at = Now() }
+    -- (12.11.2026) when a quest of the member became complete (third field), for the one chat line of several players
+    local old, quests = members[name], Parse(table.concat(buf.parts, "", 1, n))
+    if old then
+      for id, q in pairs(quests) do
+        if q[1] == 1 then
+          local o = old.quests[id]
+          if o and o[1] == 1 then q[3] = o[3] else q[3] = Now() end
+        end
+      end
+    end
+    members[name] = { quests = quests, at = Now() }
     stats.received = stats.received + 1
     Changed()
   end
@@ -276,25 +332,168 @@ local function SortedNames()
   return names
 end
 
--- { { name, complete, failed, objectives = { {fulfilled, required}, ... } }, ... }
+---------------------------------------------------------------------------
+-- (12.11.2026, Daniel: "blizzard zeigt in den tooltips jetzt auch an, wie weit wer mit der quest ist. koennen wir uns
+-- das nicht zu eigen machen?") The game's own data: C_TooltipInfo.GetQuestPartyProgress(questID, omitTitle,
+-- ignoreActivePlayer) gives the lines of the game's tooltip (a QuestPlayer line per member, then its QuestObjective
+-- lines with "... 3/8" and completed), for every member, with or without Questdon. Read only for quests of your own
+-- log (the game shows it there), at most every 2 seconds per quest. Members who sent their state with Questdon keep
+-- that (it also knows failed quests); the game fills in the others.
+---------------------------------------------------------------------------
+local GAME_AGE = 2
+gameCache = {} -- [questID] = { at = time, list = { { shown, objectives, complete }, ... } }
+local function Plain(text)
+  if type(text) ~= "string" or not ns.Usable(text) then return nil end
+  text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("^%s+", ""):gsub("%s+$", "")
+  return text ~= "" and text or nil
+end
+local function GameLines(questID)
+  local fn = C_TooltipInfo and C_TooltipInfo.GetQuestPartyProgress
+  if type(fn) ~= "function" then return nil end
+  local ok, data = pcall(fn, questID, true, true)
+  if not ok or type(data) ~= "table" or not ns.Usable(data) or type(data.lines) ~= "table" then return nil end
+  return data.lines
+end
+local function GameProgress(questID)
+  local now = Now()
+  local c = gameCache[questID]
+  if c and now - c.at >= 0 and now - c.at < GAME_AGE then return c.list end
+  local list = {}
+  local lines = GameLines(questID)
+  if lines then
+    local T = type(Enum) == "table" and Enum.TooltipDataLineType or nil
+    local PLAYER, OBJECTIVE = T and T.QuestPlayer or 18, T and T.QuestObjective or 8
+    local cur
+    for _, line in ipairs(lines) do
+      if type(line) == "table" then
+        local text = Plain(line.leftText)
+        if line.type == PLAYER and text then
+          cur = { shown = text, objectives = {} }
+          list[#list + 1] = cur
+        elseif line.type == OBJECTIVE and cur then
+          local f, r = (text or ""):match("(%d+)%s*/%s*(%d+)")
+          f, r = tonumber(f), tonumber(r)
+          local done = line.completed == true
+          if not (f and r and r > 0) then f, r = done and 1 or 0, 1 end
+          if done and f < r then f = r end
+          cur.objectives[#cur.objectives + 1] = { math.min(f, 9999), math.min(r, 9999) }
+        end
+      end
+    end
+    for _, m in ipairs(list) do
+      m.complete = #m.objectives > 0
+      for _, o in ipairs(m.objectives) do if o[1] < o[2] then m.complete = false end end
+    end
+  end
+  gameCache[questID] = { at = now, list = list }
+  return list
+end
+-- The roster's name for a name as the game's tooltip writes it (the same, or the same first name).
+local function RosterName(shown, roster)
+  local short = Short(shown) or shown
+  if roster[short] then return short end
+  local first = ns.PartyFirstName(short)
+  for name in pairs(roster) do if ns.PartyFirstName(name) == first then return name end end
+  return short
+end
+
+-- { { name, text, complete, failed, objectives = { {fulfilled, required}, ... }, doneAt, source }, ... }
+-- source: "questdon" (the member's addon sent it) or "game".
 function ns.PartyProgress(questID)
   local out = {}
-  if not Enabled() or next(members) == nil then return out end -- (1.23) no group data: nothing to sort
-  for _, name in ipairs(SortedNames()) do
-    local q = members[name].quests[questID]
-    if q then
-      local objs = {}
-      for i, o in ipairs(q[2]) do objs[i] = { o[1], o[2] } end
-      out[#out + 1] = { name = name, complete = q[1] == 1, failed = q[1] == 2, objectives = objs }
+  if not Enabled() then return out end
+  local have = {}
+  if next(members) ~= nil then -- (1.23) no group data: nothing to sort
+    for _, name in ipairs(SortedNames()) do
+      local q = members[name].quests[questID]
+      have[name] = true
+      if q then
+        local objs = {}
+        for i, o in ipairs(q[2]) do objs[i] = { o[1], o[2] } end
+        out[#out + 1] = { name = name, text = ns.PartyNameText(name), complete = q[1] == 1, failed = q[1] == 2,
+          objectives = objs, doneAt = q[3], source = "questdon" }
+      end
+    end
+  end
+  -- the game's data for the members without Questdon
+  if Channel() and ns.InQuestLog and ns.InQuestLog(questID) then
+    local list = GameProgress(questID)
+    if #list > 0 then
+      local roster, me, added = Roster(), UnitFullName("player"), false
+      for _, m in ipairs(list) do
+        local name = RosterName(m.shown, roster)
+        if not have[name] and name ~= me then
+          have[name] = true
+          local objs = {}
+          for i, o in ipairs(m.objectives) do objs[i] = { o[1], o[2] } end
+          out[#out + 1] = { name = name, text = ns.PartyNameText(name), complete = m.complete, failed = false,
+            objectives = objs, source = "game" }
+          added = true
+        end
+      end
+      if added then table.sort(out, function(a, b) return a.name < b.name end) end
     end
   end
   return out
+end
+
+-- Whether another member of the group has the quest, as far as the game or Questdon know: true, false, or nil
+-- (nobody can say: no such function in this client and not every member sent a state).
+function ns.PartyAnyoneOnQuest(questID)
+  if #ns.PartyProgress(questID) > 0 then return true end
+  local fn = C_QuestLog and C_QuestLog.IsUnitOnQuest
+  local others = math.max(GroupSize() - 1, 0)
+  if type(fn) == "function" and others > 0 then
+    local read = 0
+    for i = 1, others do
+      local ok, on = pcall(fn, "party" .. i, questID)
+      if ok and ns.Usable(on) and type(on) == "boolean" then
+        if on then return true end
+        read = read + 1
+      end
+    end
+    if read >= others then return false end
+  end
+  if others > 0 and ns.PartyMemberCount() >= others then return false end
+  return nil
+end
+
+-- /qd group raw: what the game says about the group's progress, as it comes (to check the reading above).
+function ns.PartyRaw()
+  local n = 0
+  for _, info in ipairs(ns.QuestLogEntries()) do
+    local lines = GameLines(info.questID)
+    local on = {}
+    local fn = C_QuestLog and C_QuestLog.IsUnitOnQuest
+    for i = 1, math.max(GroupSize() - 1, 0) do
+      local ok, v = false, nil
+      if type(fn) == "function" then ok, v = pcall(fn, "party" .. i, info.questID) end
+      on[#on + 1] = "party" .. i .. "=" .. tostring(ok and v)
+    end
+    print(("|cffffd100Questdon|r %d %s: %s, lines %s"):format(info.questID, tostring(info.title), table.concat(on, " "),
+      lines and tostring(#lines) or "none"))
+    for _, line in ipairs(lines or {}) do
+      if type(line) == "table" then
+        n = n + 1
+        print(("   type %s | %s | completed %s"):format(tostring(line.type), tostring(line.leftText), tostring(line.completed)))
+      end
+    end
+  end
+  print(("|cffffd100Questdon|r group raw: %d lines, API %s"):format(n,
+    tostring(C_TooltipInfo and type(C_TooltipInfo.GetQuestPartyProgress) == "function")))
 end
 
 -- Names of the members who have the quest in their log.
 function ns.PartyMembersWithQuest(questID)
   local out = {}
   for _, p in ipairs(ns.PartyProgress(questID)) do out[#out + 1] = p.name end
+  return out
+end
+
+-- (12.11.2026) The same as shown: first names in class colours.
+function ns.PartyNamesText(questID)
+  local out = {}
+  for _, p in ipairs(ns.PartyProgress(questID)) do out[#out + 1] = p.text end
   return out
 end
 
@@ -323,6 +522,29 @@ function ns.PartyStateText(p)
   local parts = {}
   for _, o in ipairs(p.objectives) do parts[#parts + 1] = ns.Fraction(o[1], o[2]) end
   return #parts > 0 and table.concat(parts, ", ") or L["in log"]
+end
+
+-- (12.11.2026) One short word for a member's state: "done", "failed", or all counters as one "5/8".
+-- plain: for the chat ("5/8" as typed, no thin spaces).
+function ns.PartyShortState(p, plain)
+  if p.failed then return L["failed"] end
+  if p.complete then return L["done"] end
+  local f, r = 0, 0
+  for _, o in ipairs(p.objectives) do f, r = f + math.min(o[1], o[2]), r + o[2] end
+  if r <= 0 then return L["in log"] end
+  return plain and ("%d/%d"):format(f, r) or ns.Fraction(f, r)
+end
+-- The members with a quest in one short line: "Mae 5/8  Tova done" (class colours), nil if none.
+-- plain: "Mae 5/8, Tova done" without colours, for the chat; openOnly: only who is not done.
+function ns.PartyQuestLine(questID, plain, openOnly)
+  local parts = {}
+  for _, p in ipairs(ns.PartyProgress(questID)) do
+    if not (openOnly and p.complete) then
+      parts[#parts + 1] = (plain and ns.PartyFirstName(p.name) or p.text) .. " " .. ns.PartyShortState(p, plain)
+    end
+  end
+  if #parts == 0 then return nil end
+  return table.concat(parts, plain and ", " or "  ")
 end
 
 -- For the panel: quests in your log that members have too, and quests members
@@ -357,7 +579,7 @@ function ns.PartyObjectiveLines(questID, index)
   for _, p in ipairs(ns.PartyProgress(questID)) do
     local o = p.objectives[index]
     if not p.complete and not p.failed and o and o[1] < o[2] then
-      out[#out + 1] = { p.name, ns.Fraction(o[1], o[2]) }
+      out[#out + 1] = { p.text, ns.Fraction(o[1], o[2]) }
     end
   end
   return out
@@ -374,11 +596,11 @@ function ns.PrintParty()
   ns.Print(L["Group: %d shared quests, %d to pick up"]:format(#po.shared, #po.takeable))
   for _, id in ipairs(po.shared) do
     local parts = { L["%s %s (player and quest state)"]:format(L["You"], ns.IsQuestComplete(id) and L["done"] or ns.QuestProgressText and ns.QuestProgressText(id) or L["in log"]) }
-    for _, p in ipairs(ns.PartyProgress(id)) do parts[#parts + 1] = L["%s %s (player and quest state)"]:format(p.name, ns.PartyStateText(p)) end
+    for _, p in ipairs(ns.PartyProgress(id)) do parts[#parts + 1] = L["%s %s (player and quest state)"]:format(p.text, ns.PartyStateText(p)) end
     ns.Print("  " .. ns.QuestTitle(id) .. L[": "] .. table.concat(parts, ", "))
   end
   for _, id in ipairs(po.takeable) do
-    ns.Print("  " .. L["To pick up: %s (%s)"]:format(ns.QuestTitle(id), table.concat(ns.PartyMembersWithQuest(id), ", ")))
+    ns.Print("  " .. L["To pick up: %s (%s)"]:format(ns.QuestTitle(id), table.concat(ns.PartyNamesText(id), ", ")))
   end
 end
 

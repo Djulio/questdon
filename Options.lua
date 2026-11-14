@@ -27,6 +27,8 @@ local PAGES = {
     { key = "autoTurnIn", name = "Auto turn in quests", tip = "Turns in completed quests. Quests with several reward choices or a gold cost, and repeatable quests, are left to you." },
     { header = "Chains and group" },
     { key = "shareQuests", name = "Share new quests with group", tip = "Shares every quest you accept with your group, if it can be shared." },
+    -- (12.11.2026, CurseForge comment, Daniel: on by default, one line per quest) Announce.lua
+    { key = "partyAnnounce", name = "Tell the group when a quest is ready", tip = "Writes one line in party chat when a quest of yours is ready to turn in, with a link to the quest. One line per quest, no progress lines, never in a raid. Nothing is written when everyone in the group uses Questdon and nobody else has the quest." },
   } },
   { title = "Map", tip = "Available quests, quest mobs and learned spots on the world map, the minimap and nameplates.", items = {
     -- (1.23) grouped by what is shown; the level options apply to the world map, minimap, nameplates and panel alike
@@ -120,7 +122,12 @@ local PAGES = {
     -- (1.3.7, Discord: "how do I remove low level quests from the quest panel?")
     { key = "trackerHideGrey", name = "Hide grey quests", tip = "Quests that give no XP for your level are not listed at all. Off: they are folded into one line at the bottom.", parent = "tracker", onChange = function() if ns.UpdateTracker then ns.UpdateTracker(true) end end },
     { key = "trackerScale", kind = "slider", name = "Text size", tip = "Size of the quest list and its text. Ctrl + mouse wheel over the title bar does it too.", min = SMIN, max = SMAX, step = 0.05, parent = "tracker", onChange = function() local f = ns.TrackerFrame and ns.TrackerFrame() if f then f:SetPanelScale(ns.db.trackerScale, true) end if ns.UpdateTracker then ns.UpdateTracker(true) end end },
-    { key = "trackerPlain", name = "No background and frame", tip = "Hides the quest list's background, its frame and the quest card's gold box: only the text, the compass and the buttons up top stay.", parent = "tracker", onChange = function() if ns.ApplyTrackerChrome then ns.ApplyTrackerChrome() end end },
+    -- (12.11.2026, Daniel: the list as an option "mehr wie blizzards eigene") one choice instead of the switch "No background
+    -- and frame": Don (trackerPlain false), Don without background (trackerPlain), like the game (trackerPlain and trackerGame)
+    { key = "trackerLook", kind = "choice", name = "Look of the quest list", choices = { "Don", "Don, no background", "Like the game" }, covers = { "trackerPlain", "trackerGame" }, parent = "tracker",
+      tip = "Don: Questdon's own window with background and frame. Don, no background: the same without background, frame and the quest card's gold box. Like the game: reads like the game's own quest list, plain text in the game's colours with the objectives under each quest. Click to switch.",
+      get = function() return ns.TrackerLook and ns.TrackerLook() or 1 end,
+      set = function(i) if ns.SetTrackerLook then ns.SetTrackerLook(i) end end },
     { header = "Direction arrow" },
     { key = "arrow", name = "Show window", status = GuideStatus, tip = "Arrow with distance to the quest you picked in the quest list or track in the quest log (nearest objective spot, or the turn-in when it is finished). Left click a Questdon map pin to point the arrow there. Drag to move, right click to drop a clicked target. /qd arrow toggles it.", onChange = function(...) ns.db.arrowAuto = nil if ns.db.arrow then ns.db.noWay = nil end ArrowLook(...) end }, -- (review 4) your choice
     { key = "arrowPlain", name = "No background and frame", tip = "Hides the plate behind the arrow's text and its frame: only the arrow and the writing stay. The background opacity below then does nothing.", parent = "arrow", onChange = ArrowLook },
@@ -151,6 +158,8 @@ local PAGES = {
     { key = "useGuildRepair", name = "Use guild bank for repairs", tip = "Tries the guild bank first, then your own gold.", parent = "autoRepair" },
     { header = "Loot and items" },
     { key = "fastLoot", name = "Fast loot", tip = "Loots everything instantly when auto loot applies. Items that bind on pickup and quest items are left to the game's own auto loot." },
+    -- (12.11.2026, Daniel) a button for each quest's usable item beside its row; the single button below stays as an option
+    { key = "trackerItemButtons", name = "Item buttons in the quest list", tip = "Shows a button beside each quest in the quest list whose item you can use; a click uses it. In a fight the buttons stay as they are. The key binding (Key Bindings > AddOns) uses the item of your tracked quest.", onChange = function() RefreshItemButton() if ns.UpdateTracker then ns.UpdateTracker(true) end end },
     { key = "questItemButton", name = "Quest item button", tip = "Shows a button for the usable item of your tracked quest. Shift-drag to move. Key binding under Key Bindings > AddOns.", onChange = RefreshItemButton },
     { header = "Targeting and waypoints" },
     { key = "targetButton", name = "Target button", tip = "Shows a button that targets a mob of your tracked quest with one click. Questdon learns the mob names from nameplates and your target, so a mob must have been seen once. Shift-drag to move. Key binding under Key Bindings > AddOns.", onChange = RefreshTargetButton },
@@ -219,6 +228,12 @@ function ns.ApplyFixedOptions(db)
   if not db.fixedV1313 then
     for _, k in ipairs(ns.FIXED_OPTIONS) do Put(k, ns.defaults[k]) end
     db.fixedV1313 = true -- the second round follows at once (a store from before 28.10.2026 keeps its map style too)
+  end
+  -- (12.11.2026, Daniel chose: once off) the buttons in the quest list take over: the single quest item button, on by
+  -- default until then, goes off once for everybody; who wants it back switches it on again
+  if not db.itemButtonsV1112 then
+    Put("questItemButton", false)
+    db.itemButtonsV1112 = true
   end
   if not db.fixedV1110 then
     for _, k in ipairs(FIXED_1110) do Put(k, ns.defaults[k]) end

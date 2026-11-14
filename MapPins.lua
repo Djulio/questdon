@@ -103,13 +103,29 @@ function ns.CheckGameQuestPins()
   -- (09.11.2026) the game draws markers, but not for every finished quest (Thelsamar: one ? of several): with pins
   -- that carry their quest, a finished quest on this map without its pin gets Questdon's ? (ns.gameMissesTurnIn)
   local changed = false
+  local listed = {} -- quests the game names for this map
   if n > 0 then v = true end
   for _, q in ipairs(list) do
     local id = type(q) == "table" and ns.Num(q.questID)
+    if id then listed[id] = true end
     if id and ns.IsQuestComplete(id) and not ns.IsQuestFailed(id) then
       if n == 0 then v = false end
       local miss = (n > 0 and tagged and not ids[id]) or nil
       if ns.gameMissesTurnIn[id] ~= miss then ns.gameMissesTurnIn[id], changed = miss, true end
+    end
+  end
+  -- (12.11.2026, Daniel in Redridge: Show of Force, grey at level 26 and ready, "?" on the minimap but not on the world
+  -- map, "vielleicht weil die quest grau ist?") a finished quest the game does not list for this map at all got no check
+  -- above, so its ? counted as the game's and nobody drew it. Every finished quest of the log whose turn-in we know on
+  -- this map and that has no pin of the game is missed by the game. (The pins seen a moment later set it back.)
+  if n == 0 or tagged then
+    for _, info in ipairs(ns.QuestLogEntries()) do
+      local id = ns.Num(info.questID)
+      if id and not listed[id] and ns.IsQuestComplete(id) and not ns.IsQuestFailed(id)
+          and ns.KnownTurnIn and ns.KnownTurnIn(id) == mapID then
+        local miss = not ids[id] or nil
+        if ns.gameMissesTurnIn[id] ~= miss then ns.gameMissesTurnIn[id], changed = miss, true end
+      end
     end
   end
   if v ~= nil and ns.gameDrawsQuestPins ~= v then ns.gameDrawsQuestPins, changed = v, true end
@@ -477,7 +493,7 @@ function ns.QuestPinDescription(pin)
   local dungeon = ns.QuestDungeon and ns.QuestDungeon(pin.questID)
   if dungeon then Add("|cff66ccff" .. L["Dungeon quest: %s"]:format(ns.DungeonName(dungeon)) .. "|r") end
   -- (1.18) group members with this quest (dungeon quests cannot be shared since beta 2026-09-24)
-  local who = pin.kind ~= "turnin" and ns.PartyMembersWithQuest and ns.PartyMembersWithQuest(pin.questID) or {}
+  local who = pin.kind ~= "turnin" and ns.PartyNamesText and ns.PartyNamesText(pin.questID) or {}
   if #who > 0 then Add("|cff99ccff" .. L["Your group has it: %s"]:format(table.concat(who, ", ")) .. "|r") end
   if pin.kind ~= "turnin" and ns.IsItemStartQuest(pin.questID) then
     Add(L["Starts from an item (drop or object nearby)"])
@@ -585,7 +601,7 @@ function ns.QuestPinTooltip(pin)
   if ns.QuestFlags(pin.questID):find("b", 1, true) then lines[#lines + 1] = L["Breadcrumb quest"] end
   local dungeon = ns.QuestDungeon and ns.QuestDungeon(pin.questID)
   if dungeon then KV(L["Dungeon"], ns.DungeonName(dungeon), "accent") end
-  local who = pin.kind ~= "turnin" and ns.PartyMembersWithQuest and ns.PartyMembersWithQuest(pin.questID) or {}
+  local who = pin.kind ~= "turnin" and ns.PartyNamesText and ns.PartyNamesText(pin.questID) or {}
   if #who > 0 then KV(L["Your group has it"], table.concat(who, ", "), "good") end
   if pin.kind ~= "turnin" and ns.IsItemStartQuest(pin.questID) then
     lines[#lines + 1] = L["Starts from an item (drop or object nearby)"]
@@ -632,7 +648,7 @@ function ns.QuestGroupTooltip(pin)
     end
     local dungeon = ns.QuestDungeon and ns.QuestDungeon(p.questID)
     if dungeon then lines[#lines + 1] = { "   " .. L["Dungeon"], ns.DungeonName(dungeon), "accent" } end
-    local who = ns.PartyMembersWithQuest and ns.PartyMembersWithQuest(p.questID) or {}
+    local who = ns.PartyNamesText and ns.PartyNamesText(p.questID) or {}
     if #who > 0 then lines[#lines + 1] = { "   " .. L["Your group has it"], table.concat(who, ", "), "good" } end
   end
   return GroupTitle(pin), lines, ns.QuestPinHint(pin)
@@ -1078,16 +1094,21 @@ local function MapCaller(closed)
 end
 -- (Daniel 26.10.: "dass jeder die selber skalieren kann") one factor for all our world map pins, 25 to 200 %
 function ns.MapPinMult()
-  local v = tonumber(ns.db and ns.db.mapPinScale) or 0.6 -- (04.11.2026, Era-Test) 60 % by default (Daniel)
+  local v = tonumber(ns.db and ns.db.mapPinScale) or 1 -- (12.11.2026, Daniel) 100 % by default
   return math.max(0.25, math.min(2, v))
 end
 -- the map's own scaling first (from 1, so the factor never adds up), then ours on top
+-- (12.11.2026, Daniel's picture at 100 %: "die ? und ausrufezeichen im verhältnis zu den pins zu groß") the game's ! and ?
+-- art is about a third bigger than our objective symbols: quest givers and turn-ins are drawn at 70 % of it
+ns.QUEST_MARK_FACTOR = 0.7
 local function ScaleBy(self, base)
   if not self.SetScale then return end
   self:SetScale(1)
   if base then base(self) end
   local s = self.GetScale and self:GetScale() or 1
   local m = ns.MapPinMult()
+  local k = type(self.qdPin) == "table" and self.qdPin.kind
+  if k == "available" or k == "turnin" then m = m * ns.QUEST_MARK_FACTOR end
   self:SetScale((tonumber(s) or 1) * m)
   -- (02.11.2026, Daniel's video: with the pin size at 75 % all pins jumped to the top left once the map rescaled them)
   -- the map places a pin for its scale (the offset divided by it); with ours on top it is placed again for the final one
@@ -1145,7 +1166,14 @@ function Setup()
     end
     self.qdWayAnchor = on or nil
   end
+  local Acquire
+  -- (12.11.2026) the size depends on what the pin shows: set again once that is known (a pooled pin showed something else)
   function QuestPin:OnAcquired(pin)
+    self.qdPin = nil
+    Acquire(self, pin)
+    if self.ApplyCurrentScale and self.GetMap and self:GetMap() then pcall(self.ApplyCurrentScale, self) end
+  end
+  function Acquire(self, pin)
     WayAnchor(self, false)
     ApplyHighlight(self, pin)
     -- (1.3.5) a marked dungeon entrance: the game's dungeon entrance icon

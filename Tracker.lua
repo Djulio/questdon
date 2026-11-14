@@ -280,6 +280,57 @@ local function LevelRGB(level)
 end
 ns.TrackerLevelRGB = LevelRGB
 
+-- (12.11.2026, Daniel after a player's "looks a bit too modern ... made to be used with ElvUI": "als option, dass sie sich
+-- mehr wie blizzards eigene anfuehlt, also direkt in das spiel ui passt") the game look (db.trackerGame, options "Look of
+-- the quest list"): no window, the head "Quests" in the game's gold, a quest as "[level] title" in gold with its
+-- objectives as "- text" lines below (done ones grey), the game's shadow instead of an outline. What the list can do
+-- stays: nearest first with the yards, the turn-in's name, timers, the compass, the tabs, the XP line.
+local GAME_GOLD, GAME_OPEN, GAME_DONE, GAME_PICK = { 1, 0.82, 0 }, { 0.8, 0.8, 0.8 }, { 0.5, 0.5, 0.5 }, { 1, 0.95, 0.72 }
+local function Game() local db = DB() return db.trackerGame == true and db.trackerPlain == true end
+ns.TrackerGameLook = Game
+local GameTitle -- "[level] title" with the quest's map colour as a dot in front (set below ColorDot)
+local function ObjText(o) return Game() and ("- " .. (o.text or "")) or o.text end
+local function ObjColor(o)
+  if Game() then return o.done and GAME_DONE or GAME_OPEN end
+  return o.done and "good" or (B.textSecondary or "textSecondary")
+end
+
+-- (13.11.2026, Daniel: "ich will in der questliste mit shift linksklick in die blizzard questliste kommen mit shift
+-- rechtsklick ins questbuch. zum nachlesen ist irgendwie blizzards questlog schöner") the game's own quest log, opened
+-- at a quest. False when this client has no quest log we know.
+function ns.OpenGameQuestLog(questID)
+  -- (Daniel's pictures 13.11.: Forever has the quest log in the world map, with a page per quest) that page first
+  local open = rawget(_G, "QuestMapFrame_OpenToQuestDetails")
+  if type(open) == "function" then
+    local ok = pcall(open, questID)
+    if ok then return true end
+  end
+  -- the classic quest log window
+  local f = rawget(_G, "QuestLogFrame")
+  if type(f) ~= "table" then return false end
+  local idx = ns.Num(ns.Value(C_QuestLog and C_QuestLog.GetLogIndexForQuestID, questID))
+  if not (idx and idx > 0) then idx = ns.Num(ns.Value(rawget(_G, "GetQuestLogIndexByID"), questID)) end
+  local show = rawget(_G, "ShowUIPanel")
+  if not (f.IsVisible and f:IsVisible()) then
+    if type(show) == "function" then pcall(show, f) elseif f.Show then pcall(f.Show, f) end
+  end
+  if idx and idx > 0 then
+    local sel, upd = rawget(_G, "QuestLog_SetSelection"), rawget(_G, "QuestLog_Update")
+    if type(sel) == "function" then pcall(sel, idx)
+    elseif type(rawget(_G, "SelectQuestLogEntry")) == "function" then pcall(rawget(_G, "SelectQuestLogEntry"), idx) end
+    if type(upd) == "function" then pcall(upd) end
+  end
+  return true
+end
+-- a click with Shift on a quest of the list: left the game's quest log, right the quest book. True when it was one.
+local function ShiftClick(questID, button)
+  if not (questID and IsShiftKeyDown and IsShiftKeyDown()) then return false end
+  if button == "RightButton" or not ns.OpenGameQuestLog(questID) then ns.QuestBookOpenQuest(questID) end
+  return true
+end
+
+ns.TrackerShiftClick = ShiftClick -- (Build is at Lua's limit of 60 upvalues)
+
 local function CreateCard()
   local f = CreateFrame("Button", nil, UIParent)
   f:SetSize(280, 80)
@@ -313,11 +364,14 @@ local function CreateCard()
   f:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   f:SetScript("OnClick", function(self, button)
     -- (Questdon review 3) right-click: the same menu as the rows (abandon, hide), the card's quest has no row
+    if ShiftClick(self.questID, button) then return end
     if button == "RightButton" and self.questID and ns.TrackerQuestMenu then
       for _, e in ipairs(ns.TrackerEntries()) do if e.questID == self.questID then ns.TrackerQuestMenu(e) return end end
       return
     end
-    if self.questID and IsShiftKeyDown and IsShiftKeyDown() then ns.QuestBookOpenQuest(self.questID) end
+    -- (13.11.2026, Daniel: a waypoint of /way stood under the main quest; "klicke ich aber auf die hauptquest dann
+    -- bleibt es") a left click is the same pick as on a row: the arrow leaves a clicked target for this quest
+    if button ~= "RightButton" and self.questID and ns.TrackerPick then ns.TrackerPick(self.questID) end
   end)
   f:SetScript("OnEnter", function(self)
     if not self.questID then return end
@@ -325,7 +379,7 @@ local function CreateCard()
     local hint = ns.QuestHint and ns.QuestHint(self.questID)
     if hint then lines[#lines + 1] = "|cffdcc17f" .. L["Hint"] .. ":|r " .. hint end
     Style.Tooltip(self, ns.QuestTitle(self.questID), lines,
-      L["Shift-click: open it in the quest book."] .. " " .. L["Right-click: abandon or hide."])
+      L["Shift-click: the game's quest log. Shift-right-click: the quest book."] .. " " .. L["Right-click: abandon or hide."])
   end)
   f:SetScript("OnLeave", function(self) Style.HideTooltip(self) end)
   -- the compass follows the arrow 20 times a second
@@ -411,6 +465,30 @@ local function FillCard(e, width)
   if withCompass then card.compass:Show() card.dist:Show() else card.compass:Hide() card.dist:Hide() end
   local textW = withCompass and (width - COMPASS - 24) or (width - 16)
   card:SetWidth(width)
+  -- (12.11.2026) the game look: the title on top ("[level] title"), the status line below it only when there is one
+  local game = Game()
+  -- (12.11.2026, Daniel to the picture of the card: "oben dürfte es auch eingerückt sein") the game look: the lines
+  -- below the title indented like the rows of the list
+  local ind = game and 12 or 0
+  card.label:ClearAllPoints()
+  card.title:ClearAllPoints()
+  if game then
+    card.title:SetPoint("TOPLEFT", card, "TOPLEFT", 11, -6)
+    card.label:SetPoint("TOPLEFT", card.title, "BOTTOMLEFT", ind, -2)
+  else
+    card.label:SetPoint("TOPLEFT", card, "TOPLEFT", 11, -6)
+    card.title:SetPoint("TOPLEFT", card.label, "BOTTOMLEFT", 0, -2)
+  end
+  Color(card.title, game and GAME_PICK or CREAM)
+  -- (13.11.2026, Daniel: "oben die hauptquest könnte man auch vielleicht so groß, wie die anderen machen? und dann nur
+  -- mit einem balken senkrecht davor markieren") the game look: the picked quest's title as big as its lines and the
+  -- other quests (11), the gold bar on the card's left marks it (ApplyTrackerChrome)
+  -- (13.11.2026, Daniel: "Beides nachziehen") the Don look too
+  local tsize = 11
+  if card._titleSize ~= tsize then
+    card._titleSize = tsize
+    if card.title.SetFont then pcall(function() local p = card.title:GetFont() if p then card.title:SetFont(p, tsize, "") end end) end
+  end
   if not e then
     card.label:SetText(L["Quest log empty"])
     card.title:SetText("")
@@ -420,15 +498,22 @@ local function FillCard(e, width)
   local clock = Clock(e)
   -- (review 2) another quest's timer runs: its time and name behind (the rows that show it may be collapsed)
   local other = soonest and soonest ~= e and Clock(soonest)
-  card.label:SetWidth(textW)
-  card.label:SetText((ns.QuestLevelTag(e.questID) or "") .. (e.failed and Style.Colorize(L["Failed"], "critical")
-    or e.complete and L["Ready to turn in"] or L["Picked"]) .. (clock and ("  " .. clock) or "")
-    .. (other and ("  " .. other .. " " .. (soonest.title or "")) or ""))
-  if Style.FitText then Style.FitText(card.label, textW) end
+  card.label:SetWidth(textW - ind)
+  local status
+  if game then
+    status = (e.failed and Style.Colorize(L["Failed"], "critical") or "") .. (clock and ((e.failed and "  " or "") .. clock) or "")
+      .. (other and ("  " .. other .. " " .. (soonest.title or "")) or "")
+    card.label:SetText(status)
+  else
+    card.label:SetText((ns.QuestLevelTag(e.questID) or "") .. (e.failed and Style.Colorize(L["Failed"], "critical")
+      or e.complete and L["Ready to turn in"] or L["Picked"]) .. (clock and ("  " .. clock) or "")
+      .. (other and ("  " .. other .. " " .. (soonest.title or "")) or ""))
+  end
+  if Style.FitText then Style.FitText(card.label, textW - ind) end
   card.title:SetWidth(textW)
-  card.title:SetText(e.title or "")
+  card.title:SetText(game and GameTitle(e) or (e.title or ""))
   if Style.FitText then Style.FitText(card.title, textW) end
-  local y = 6 + 12 + 2 + 16 + 4
+  local y = game and (6 + 14 + 4 + (status ~= "" and 14 or 0)) or (6 + 12 + 2 + 14 + 4)
   local n = 0
   local shown = 0
   for _, o in ipairs(e.objs) do
@@ -436,15 +521,15 @@ local function FillCard(e, width)
     shown = shown + 1
     n = n + 1
     local fs = Line(n)
-    fs:SetWidth(textW)
+    fs:SetWidth(textW - ind)
     fs:ClearAllPoints()
-    fs:SetPoint("TOPLEFT", card, "TOPLEFT", 11, -y)
-    fs:SetText(o.text)
-    Color(fs, o.done and GREEN or SECOND)
-    if Style.FitText then Style.FitText(fs, textW) end
+    fs:SetPoint("TOPLEFT", card, "TOPLEFT", 11 + ind, -y)
+    fs:SetText(ObjText(o))
+    Color(fs, game and (o.done and GAME_DONE or GAME_OPEN) or (o.done and GREEN or SECOND))
+    if Style.FitText then Style.FitText(fs, textW - ind) end
     y = y + 14
-    -- blocks for small counts (the game's x/y), a thin bar for big ones
-    if o.need and o.need > 1 and not o.done then
+    -- blocks for small counts (the game's x/y), a thin bar for big ones; (12.11.2026) none in the game look
+    if o.need and o.need > 1 and not o.done and not game then
       local have = math.max(0, math.min(o.need, o.have or 0))
       if o.need <= 12 then
         local gap = 2
@@ -474,19 +559,33 @@ local function FillCard(e, width)
     if who then
       n = n + 1
       local fs = Line(n)
-      fs:SetWidth(textW)
+      fs:SetWidth(textW - ind)
       fs:ClearAllPoints()
-      fs:SetPoint("TOPLEFT", card, "TOPLEFT", 11, -y)
+      fs:SetPoint("TOPLEFT", card, "TOPLEFT", 11 + ind, -y)
       fs:SetText(L["Turn in: %s"]:format(who))
       Color(fs, e.complete and GREEN or HINT)
       y = y + 14
     end
   end
+  -- (12.11.2026, Daniel: "Partyabgleich in Klassenfarben der Spieler und nur den Vornamen, das muss dann kurz gehalten
+  -- werden") the group members with this quest in one line: "Mae 5/8  Tova done"
+  local group = ns.PartyQuestLine and ns.PartyQuestLine(e.questID)
+  if group then
+    n = n + 1
+    local fs = Line(n)
+    fs:SetWidth(textW - ind)
+    fs:ClearAllPoints()
+    fs:SetPoint("TOPLEFT", card, "TOPLEFT", 11 + ind, -y)
+    fs:SetText(group)
+    Color(fs, game and GAME_OPEN or SECOND)
+    if Style.FitText then Style.FitText(fs, textW - ind) end
+    y = y + 14
+  end
   -- the way around / first to the way in (from the arrow)
   if not card.way then card.way = Font(card, 10, GOLD, "LEFT") end
-  card.way:SetWidth(textW)
+  card.way:SetWidth(textW - ind)
   card.way:ClearAllPoints()
-  card.way:SetPoint("TOPLEFT", card, "TOPLEFT", 11, -y)
+  card.way:SetPoint("TOPLEFT", card, "TOPLEFT", 11 + ind, -y)
   y = y + 13
   return math.max(y + 4, withCompass and (COMPASS + 38) or 0)
 end
@@ -533,7 +632,7 @@ local reader
 local function ReaderGet(key)
   local t = DB().readerPanel
   local v = type(t) == "table" and t[key] or nil
-  if v == nil and key == "scale" then return 1.2 end
+  if v == nil and key == "scale" then return (ns.defaults and ns.defaults.trackerScale) or 1 end -- (12.11.2026) the list's default, 100 %
   return v
 end
 local function ReaderSet(key, v) local db = DB() if type(db.readerPanel) ~= "table" then db.readerPanel = {} end db.readerPanel[key] = v end
@@ -681,6 +780,29 @@ function Hidden()
   return c.hiddenQuests
 end
 ns.TrackerHidden = Hidden -- (tests)
+-- (13.11.2026, Daniel: "ich möchte auch das jede eigene quest einklappbar ist. am besten links neben den quests")
+-- quests whose lines (objectives, turn-in) are folded away, per character (QuestdonCharDB.foldedQuests)
+local function FoldedQuests()
+  local c = ns.charDB
+  if type(c) ~= "table" then return {} end
+  if type(c.foldedQuests) ~= "table" then c.foldedQuests = {} end
+  return c.foldedQuests
+end
+ns.TrackerFoldedQuests = FoldedQuests -- (tests)
+-- (13.11.2026, Daniel: "by zone sollte immer zuerst die zone öffnen, in der man drin ist ansonsten die nächstgelegene")
+-- the zone the tab "By zone" puts first and opens; shut: the player folded it himself (until the zone changes).
+-- (13.11.2026, Daniel: "und by zone sollte alle zonen geschlossen öffnen, man scrollt da sonst jahre wenn alles offen
+-- ist") every other zone is folded until you open it (QuestdonDB.trackerZoneOpen).
+-- One table on ns: Build is at Lua's limit of 60 upvalues.
+ns.TrackerFold = { IND = 20, shut = nil }
+-- (12.11.2026) a grey or finished quest close by is listed in "Nearby" like the others: within 300 yards.
+-- (13.11.2026, Daniel in Duskwood, a grey Duskwood quest 957 yards away and his finished ones folded away while "Nearby"
+-- listed quests of other zones: "so würde ich denken, ich habe nicht mehr offen in duskwood", "dabei muss ich x quest
+-- abgeben, die fertig sind", "und alles in der nähe") also every one of the zone you are in, and within 1000 yards
+function ns.TrackerClose(e, zone)
+  if e.dist and e.dist <= 1000 then return true end
+  return zone ~= nil and e.zone == zone
+end
 -- (Questdon review 4) a hidden quest that leaves the log is shown again when you take it once more
 ns.On("QUEST_REMOVED", function(_, questID) local id = ns.Num(questID) if id then Hidden()[id] = nil end end)
 ns.On("QUEST_TURNED_IN", function(_, questID) local id = ns.Num(questID) if id then Hidden()[id] = nil end end)
@@ -840,6 +962,14 @@ local function ColorDot(questID)
   return ("|cff%02x%02x%02x\226\128\162|r "):format(math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5))
 end
 local COMPLETE_TEXT = { 0.62, 0.92, 0.62 }
+-- (12.11.2026) the part in front: the dot and "[level]" in its colour
+local function GameLead(e)
+  local lv = e.level and e.level > 0 and e.level or nil
+  local c = LevelRGB(lv)
+  return ColorDot(e.questID) .. ("|cff%02x%02x%02x[%s]|r"):format(math.floor((c[1] or 1) * 255 + 0.5), math.floor((c[2] or 1) * 255 + 0.5),
+    math.floor((c[3] or 1) * 255 + 0.5), lv and tostring(lv) or "?")
+end
+GameTitle = function(e) return GameLead(e) .. " " .. (e.title or "") .. ns.GroupTag(e.questID) end
 -- (02.11.2026) a Don row: title (with the group tag), the second line, its colour
 local function QuestRowText(e)
   local title = (e.title or "") .. ns.GroupTag(e.questID)
@@ -862,6 +992,8 @@ local function MarkRGB(questID)
 end
 local function DonRow(row, e)
   local title, tc, sub, sc = QuestRowText(e)
+  -- (13.11.2026, Daniel: the Don look gets the fold button in "Nearby" too) a folded quest: its title only
+  if ns.TrackerFoldedQuests and ns.TrackerFoldedQuests()[e.questID] then sub = nil end
   row:SetText(title, tc)
   row:SetSub(sub, sc)
   local lv = e.level and e.level > 0 and e.level or nil
@@ -873,20 +1005,85 @@ end
 -- (XP) or an objective counting up rebuilt every row, card and closure; now the rows that show progress are kept
 -- here and only their texts are written again (UpdateProgress)
 local progRows, progN = {}, 0 -- [1..progN] = { row = , e = , kind = "quest" | "obj" | "clock", i = objective }
+-- (12.11.2026, Daniel: a button for each quest's usable item beside its row) the rows of the last build that can carry
+-- an item button, top down: the card, the row of an item that starts a quest, the quest rows. ItemButton.lua owns the
+-- buttons (protected: set by screen coordinates, never anchored to a row, only out of combat) and asks for the places.
+local itemRows, itemRowN = {}, 0 -- [i] = { frame = a Style item (its _y and _h), questID = , itemID = (a quest starter) }
+local function ItemSpot(frame, questID, itemID)
+  if not frame then return end
+  itemRowN = itemRowN + 1
+  local r = itemRows[itemRowN]
+  if not r then r = {} itemRows[itemRowN] = r end
+  r.frame, r.questID, r.itemID = frame, questID, itemID
+end
+-- (Build is at Lua's limit of 60 upvalues: it reaches these two through ns)
+ns.TrackerItemSpot = ItemSpot
+function ns.TrackerItemReset() itemRowN = 0 end
+local ITEM_GAP = 4
+-- fn(questID, itemID, x, y, point) -> true when it took the place; x, y from the screen's bottom left in the list's own
+-- scale; returns the scale (against UIParent) and the alpha the buttons take. Left of the window, right of it when the
+-- window stands at the screen's left edge.
+function ns.TrackerItemSpots(fn)
+  if not panel or itemRowN == 0 or DB().tracker == false or not panel:IsShown() then return end
+  local body = panel._body
+  local top = body and ns.Num(ns.Value(body.GetTop, body))
+  local left, right = ns.Num(ns.Value(panel.GetLeft, panel)), ns.Num(ns.Value(panel.GetRight, panel))
+  if not (top and left and right) then return end
+  local size = ns.LIST_ITEM_SIZE or 26
+  local point, x = "TOPRIGHT", left - ITEM_GAP
+  if x - size < 0 then point, x = "TOPLEFT", right + ITEM_GAP end
+  local last
+  for i = 1, itemRowN do
+    local r = itemRows[i]
+    local f = r.frame
+    if f._inUse and f._y and f:IsShown() then
+      local h = tonumber(f._h) or 0
+      -- a row as high as the button or higher: near its top (a Don row: in its middle); a lower one: the button starts
+      -- a little above it and reaches into the row below, the quest's first objective
+      local y = top - f._y + (h >= size and -math.min(4, (h - size) / 2) or 2)
+      if last and y > last - 1 then y = last - 1 end -- never over the button above
+      if fn(r.questID, r.itemID, x, y, point) then last = y - size end
+    end
+  end
+  local ps = ns.Num(ns.Value(panel.GetEffectiveScale, panel)) or 1
+  local us = ns.Num(ns.Value(UIParent.GetEffectiveScale, UIParent)) or 1
+  return us > 0 and ps / us or 1, ns.Num(ns.Value(panel.GetAlpha, panel)) or 1
+end
+function ns.TrackerItemRows() return itemRows, itemRowN end -- (tests)
 local function KeepProgress(row, e, kind, i)
   progN = progN + 1
   local r = progRows[progN]
   if not r then r = {} progRows[progN] = r end
   r.row, r.e, r.kind, r.i = row, e, kind, i
 end
+-- (12.11.2026) the game look: one line "[level] title" in the game's gold and font size; the objectives follow as rows
+-- (12.11.2026, Daniel on the laptop: "schrift sehr groß") the title as big as the objectives below it, as in the game's
+-- own list; its gold sets it apart
+local function GameRow(row, e)
+  -- (12.11.2026, Daniel: "bei einer zweiten zeile gerne so eingerückt, dass es mit der oberen am gleichen punkt
+  -- anfängt") dot and level as the row's lead (DonCore Style 18): a long title's second line starts under its first
+  if row.SetLead then
+    row:SetLead(GameLead(e))
+    row:SetText((e.title or "") .. ns.GroupTag(e.questID), e.complete and COMPLETE_TEXT or GAME_GOLD)
+  else
+    row:SetText(GameTitle(e), e.complete and COMPLETE_TEXT or GAME_GOLD)
+  end
+  return row
+end
+local function TitleRow(row, e)
+  if Game() then return GameRow(row, e) end
+  return DonRow(row, e)
+end
+local GAME_GAP = 6
 local function RowFor(e, focusID)
-  local row = Style.Row(panel):SetGapBefore(QUEST_GAP)
-  DonRow(row, e)
+  local row = Style.Row(panel):SetGapBefore(Game() and GAME_GAP or QUEST_GAP)
+  TitleRow(row, e)
   KeepProgress(row, e, "quest")
+  ItemSpot(row, e.questID)
   if e.questID == focusID then row:SetActive(true) end
   row:SetOnClick(function(_, button)
+    if ShiftClick(e.questID, button) then return end
     if button == "RightButton" then ShowQuestMenu(e) return end
-    if IsShiftKeyDown and IsShiftKeyDown() then ns.QuestBookOpenQuest(e.questID) return end
     Pick(e.questID)
   end)
   row:SetTooltip(function()
@@ -896,13 +1093,48 @@ local function RowFor(e, focusID)
     if e.dist then lines[#lines + 1] = { L["Distance"], Yards(e.dist) } end
     local hint = ns.QuestHint and ns.QuestHint(e.questID)
     if hint then lines[#lines + 1] = "|cffdcc17f" .. L["Hint"] .. ":|r " .. hint end
-    return e.title, lines, L["Click: pick it. Shift-click: open it in the quest book."] .. " " .. L["Right-click: abandon or hide."]
+    return e.title, lines, L["Click: pick it. Shift-click: the game's quest log. Shift-right-click: the quest book."] .. " " .. L["Right-click: abandon or hide."]
   end)
   return row
 end
 
+-- (Questdon review 2) a failed quest, a timed quest's time left, the turn-in or the objectives as rows below a quest's
+-- title: the zone and level tabs, and (12.11.2026) every tab of the game look
+-- (13.11.2026) row: the quest's title row; it gets the fold button (DonCore Style 19), and a folded quest has no lines
+local FOLD_IND = ns.TrackerFold.IND
+local function FoldSpot(row, e)
+  local shut = FoldedQuests()[e.questID] and true or false
+  row:SetFoldButton(not shut, function()
+    local f = FoldedQuests()
+    f[e.questID] = not f[e.questID] or nil
+    ns.UpdateTracker(true)
+  end)
+  return shut
+end
+ns.TrackerFold.Spot = FoldSpot -- (Build is at Lua's limit of 60 upvalues)
+local function QuestLines(e, row)
+  -- (13.11.2026) a quest under a section's head is indented (Build): its lines go with it
+  local ind = 12 + (row and row._indent or 0)
+  if row and row.SetFoldButton then
+    if FoldSpot(row, e) then return end
+    ind = ind + FOLD_IND
+  end
+  if e.failed then
+    Style.Row(panel):SetText(L["Failed"], "critical"):SetIndent(ind)
+  elseif e.complete then
+    local who = TurnInName(e.questID)
+    Style.Row(panel):SetText(who and L["Turn in: %s"]:format(who) or L["Ready to turn in"], "good"):SetIndent(ind)
+  else
+    local clock = Clock(e)
+    if clock then KeepProgress(Style.Row(panel):SetText(clock):SetIndent(ind), e, "clock") end
+    for i, o in ipairs(e.objs) do
+      KeepProgress(Style.Row(panel):SetText(ObjText(o), ObjColor(o)):SetIndent(ind), e, "obj", i)
+    end
+  end
+end
+
 local function NeedleRow(row, e)
-  row:SetValue(Yards(e.dist), GOLD)
+  row:SetValue(Yards(e.dist), Game() and GAME_OPEN or GOLD)
   -- (18.10., Daniel: "the small arrows beside the quests can go") no needle icon on the rows any more
   -- (17.10.) kept with its entry: the yards are written again without a rebuild when they change by 10
   rows[#rows + 1] = { row = row, target = e.target, e = e, b = e.dist and math.floor(e.dist / 10) }
@@ -916,7 +1148,7 @@ local function UpdateYards()
       local b = e.dist and math.floor(e.dist / 10)
       if b ~= r.b then
         r.b = b
-        r.row:SetValue(Yards(e.dist), B.goldLight or "accent")
+        r.row:SetValue(Yards(e.dist), Game() and GAME_OPEN or (B.goldLight or "accent"))
       end
     end
   end
@@ -1042,9 +1274,12 @@ local function ExtrasSig()
   if ns.db.partyProgress and ns.PartyMemberCount and ns.PartyMemberCount() > 0 and ns.PartyOverview then
     local po = ns.PartyOverview()
     Put(#po.shared) Put(#po.takeable)
+    Put(ns.partyGen) -- (12.11.2026) the group line of the quest card
   else
     Put(nil) Put(nil)
   end
+  -- (12.11.2026) the group line of the quest card: the game's data changes without a message
+  Put(card and card.questID and ns.PartyQuestLine and ns.PartyQuestLine(card.questID) or nil)
   -- (Questdon review 5) the fight's state too: the destroy row built in combat is a plain row, rebuilt after it
   Put(InCombatLockdown and InCombatLockdown() and true or false)
 end
@@ -1092,14 +1327,14 @@ local function Extras()
           lines[#lines + 1] = { "  " .. L["You"], ns.IsQuestComplete(id) and L["done"] or ns.QuestProgressText(id) or L["in log"],
             ns.IsQuestComplete(id) and "good" or "textPrimary" }
           for _, p in ipairs(ns.PartyProgress(id)) do
-            lines[#lines + 1] = { "  " .. p.name, ns.PartyStateText(p), p.complete and "good" or (p.failed and "critical") or "textPrimary" }
+            lines[#lines + 1] = { "  " .. p.text, ns.PartyStateText(p), p.complete and "good" or (p.failed and "critical") or "textPrimary" }
           end
         end
         if #po.takeable > 0 then
           lines[#lines + 1] = { header = L["Your group has, you can pick up:"] }
           for i = 1, math.min(#po.takeable, 30) do
             local id = po.takeable[i]
-            lines[#lines + 1] = { "  " .. ns.QuestTitle(id), table.concat(ns.PartyMembersWithQuest(id), ", ") }
+            lines[#lines + 1] = { "  " .. ns.QuestTitle(id), table.concat(ns.PartyNamesText(id), ", ") }
           end
         end
         return L["Group progress"], lines, nil
@@ -1136,8 +1371,10 @@ local function TabColors()
   for _, b in ipairs(tabs and tabs.b or {}) do
     local on = TabActive(b.key)
     b.on = on
-    Color(b.fs, on and GOLD_L or (b.hover and CREAM or HINT))
-    if on then b.line:Show() else b.line:Hide() end
+    local game = Game() -- (12.11.2026) the game look: plain words, the active one in the game's gold, no line
+    if game then Color(b.fs, on and GAME_GOLD or (b.hover and GAME_OPEN or GAME_DONE))
+    else Color(b.fs, on and GOLD_L or (b.hover and CREAM or HINT)) end
+    if on and not game then b.line:Show() else b.line:Hide() end
   end
 end
 local function Tabs()
@@ -1187,7 +1424,7 @@ local function Tabs()
     b:SetPoint("LEFT", tabs, "LEFT", inset + (i - 1) * each, 0)
     b._w = each
     b:SetSize(each, TAB_H)
-    b.fs:SetText(Kit and Kit.Upper(b.full) or b.full)
+    b.fs:SetText((Kit and not Game()) and Kit.Upper(b.full) or b.full)
     if Style.FitText then Style.FitText(b.fs, each - 12, "cut") end
     local tw = math.floor(ns.Num(ns.Value(b.fs.GetStringWidth, b.fs)) or (each - 24))
     b.lineW = math.max(12, math.min(each - 12, tw + 8))
@@ -1207,12 +1444,12 @@ local function UpdateProgress(focus)
   for i = 1, progN do
     local r = progRows[i]
     local e = r.e
-    if r.kind == "quest" then DonRow(r.row, e)
+    if r.kind == "quest" then TitleRow(r.row, e)
     elseif r.kind == "clock" then r.row:SetText(Clock(e) or "")
     else
       local o = e.objs[r.i]
       if not o then return false end
-      r.row:SetText(o.text, o.done and "good" or (B.textSecondary or "textSecondary"))
+      r.row:SetText(ObjText(o), ObjColor(o))
     end
   end
   if footerBar then
@@ -1245,12 +1482,38 @@ local function Build()
   sigN, progSigN = 0, 0
   Put(Mode()) Put(ns.db.trackerSortLevel) Put(focusID) Put(ns.GuideActive()) Put(Limit()) Put(scrollSkip) Put(panel._width)
   Put(ns.db.trackerGreyOpen) Put(ns.db.trackerHideGrey) Put(ns.db.trackerHiddenOpen) Put(ns.db.xpBar)
+  -- (12.11.2026) the item buttons: an item in the bags that starts a quest has a row of its own
+  local starter, starterQuest
+  if ns.db.trackerItemButtons and ns.ListStarterItem then starter, starterQuest = ns.ListStarterItem() end
+  Put(starter) Put(starterQuest)
   ExtrasSig()
   local hid = Hidden()
+  local FoldS = ns.TrackerFold
+  local fq = ns.TrackerFoldedQuests()
+  -- (13.11.2026) "By zone": the zone you are in, else the zone of the nearest quest
+  local here
+  local zt = ns.Value(GetRealZoneText)
+  zt = type(zt) == "string" and ns.Usable(zt) and zt ~= "" and zt or nil
+  Put(zt or false)
+  if Mode() ~= "near" and not ns.db.trackerSortLevel then
+    local nearZ, nearD
+    for _, e in ipairs(list) do
+      if not hid[e.questID] and not (e.grey and not e.complete) then
+        local z = e.zone or L["Other"]
+        if zt and z == zt then here = z break end
+        if e.dist and (not nearD or e.dist < nearD) then nearZ, nearD = z, e.dist end
+      end
+    end
+    here = here or nearZ
+  end
+  if FoldS.shut ~= nil and FoldS.shut ~= here then FoldS.shut = nil end
+  Put(here or false) Put(FoldS.shut or false)
   for _, e in ipairs(list) do
+    Put(fq[e.questID] and true or false)
     Put(e.questID) Put(e.title) Put(e.level) Put(e.zone) Put(e.complete) Put(e.failed) Put(e.grey) Put(hid[e.questID] and true or false)
     local left = not e.failed and ns.QuestTimeLeft(e.questID) or nil
     Put(e.dist ~= nil) Put(left ~= nil) Put(#e.objs)
+    Put((e.grey or e.complete) and ns.TrackerClose(e, zt)) -- (12.11.2026) close by: listed on top in "Nearby"
     PutP(left)
     for _, o in ipairs(e.objs) do PutP(o.have) PutP(o.done) end
   end
@@ -1276,6 +1539,9 @@ local function Build()
   local changed = ns.MemPart("tracker signature", SigChanged)
   local progNew = ProgChanged()
   if orderNew and not changed and lastSig and orderAt and now - orderAt < ORDER_SECS and now >= orderAt then orderNew = false end
+  -- (12.11.2026) in a fight the item buttons cannot follow their rows: a new order alone waits for its end (the fight's
+  -- end rebuilds the list, ExtrasSig)
+  if orderNew and not changed and lastSig and ns.db.trackerItemButtons and InCombatLockdown and InCombatLockdown() then orderNew = false end
   if not changed and not orderNew and lastSig and (not progNew or ns.MemPart("tracker progress", UpdateProgress, focus)) then
     ns.MemPart("tracker yards", UpdateYards)
     local b = best and math.floor(best / 10)
@@ -1284,7 +1550,13 @@ local function Build()
   end
   lastSig = true
   ns.MemCount("tracker rebuild") -- (18.10.) how often the rows are made anew
+  if #list > 0 and next(fq) then -- (13.11.2026) a quest that left the log is open again when you take it once more
+    local inLog = {}
+    for _, e in ipairs(list) do inLog[e.questID] = true end
+    for id in pairs(fq) do if not inLog[id] then fq[id] = nil end end
+  end
   progN, footerBar, cardH = 0, nil, nil
+  ns.TrackerItemReset()
   nearbyRow, nearbyB = nil, nil
   orderAt = now
   for i = 1, #orderBuf do orderLast[i] = orderBuf[i].questID end
@@ -1313,6 +1585,7 @@ local function Build()
     card:Show()
     local holder = Style.Content(panel, card, h)
     if holder and holder.SetKeepWhenCollapsed then holder:SetKeepWhenCollapsed(true) end
+    if focus then ns.TrackerItemSpot(holder, focus.questID) end
     -- (18.10., Daniel: "Leveldon off and reloaded, Questdon showed only one quest though more were in the log") the
     -- list was folded: only the card stays then, which looked like a list of one. A line under the card says how many
     -- more there are; a click opens the list.
@@ -1332,11 +1605,30 @@ local function Build()
   else
     card.questID = focusID
   end
+  -- (12.11.2026, Daniel chose: a row of its own at the top) an item in the bags that starts a quest you can take: its
+  -- button stands beside this row; the row itself cannot use the item (only a protected button can)
+  if starter then
+    local title = starterQuest and ns.QuestTitle(starterQuest)
+    if title == "?" then title = nil end
+    local srow = Style.Row(panel):SetText(title and L["Starts a quest: %s"]:format(title) or L["Starts a quest"], { 0.96, 0.78, 0.26 })
+      :SetGapBefore(4)
+      :SetTooltip(function()
+        return ns.ItemName(starter), { title and L["Starts a quest: %s"]:format(title) or L["Starts a quest"] }, L["Click the quest button"]
+      end)
+    ns.TrackerItemSpot(srow, nil, starter)
+  end
+  -- (12.11.2026, Daniel at level 27 in Northshire, the quests around him not in "Nearby": "nearby low leavel quest zeigt
+  -- er gar nicht an?"; he chose: the near ones always on top) in the tab "Nearby" a grey or finished quest within
+  -- 300 yards is listed by its distance like the others; farther ones stay folded (grey) or below (finished)
+  local nearTab = Mode() == "near"
   local greys, hiddenQ, rest = {}, {}, {}
   for _, e in ipairs(list) do
     local free = e.questID ~= focusID or ns.GuideActive()
     if hid[e.questID] and free then hiddenQ[#hiddenQ + 1] = e
-    elseif e.grey and free then greys[#greys + 1] = e
+    -- (13.11.2026, Daniel in Duskwood, a grey Duskwood quest 957 yards away folded under "Grey quests" while "Nearby"
+    -- listed quests of other zones: "so würde ich denken, ich habe nicht mehr offen in duskwood") a grey quest of the
+    -- zone you are in is listed too
+    elseif e.grey and free and not (nearTab and not ns.db.trackerHideGrey and ns.TrackerClose(e, zt)) then greys[#greys + 1] = e
     else rest[#rest + 1] = e end
   end
   list = rest
@@ -1344,25 +1636,28 @@ local function Build()
   local function Greys()
     if #greys == 0 or ns.db.trackerHideGrey then return end
     local open = ns.db.trackerGreyOpen
-    Style.Row(panel):SetText(L["Grey quests"] .. " (" .. #greys .. ")", B.textHint or "textHint")
-      :SetValue(open and "-" or "+", B.textHint or "textHint"):SetGapBefore(4)
-      :SetOnClick(function() ns.db.trackerGreyOpen = not ns.db.trackerGreyOpen or nil ns.UpdateTracker(true) end)
+    local function Toggle() ns.db.trackerGreyOpen = not ns.db.trackerGreyOpen or nil ns.UpdateTracker(true) end
+    local r = Style.Row(panel):SetText(L["Grey quests"] .. " (" .. #greys .. ")", B.textHint or "textHint")
+      :SetGapBefore(4):SetOnClick(Toggle)
       :SetTooltip(function() return L["Grey quests"], { L["No XP left for your level."] }, L["Click: show or hide them."] end)
+    -- (13.11.2026) the fold button on the left (DonCore Style 19) instead of "+" and "-" on the right
+    if r.SetFoldButton then r:SetFoldButton(open, Toggle) else r:SetValue(open and "-" or "+", B.textHint or "textHint") end
     if open then
       table.sort(greys, function(a, b) return (a.level or 0) < (b.level or 0) end)
-      for _, e in ipairs(greys) do RowFor(e, focusID):SetIndent(12) end
+      for _, e in ipairs(greys) do RowFor(e, focusID):SetIndent(FoldS.IND) end
     end
   end
   -- the quests you hid (right-click menu), folded the same way
   local function HiddenLine()
     if #hiddenQ == 0 then return end
     local open = ns.db.trackerHiddenOpen
-    Style.Row(panel):SetText(L["Hidden quests"] .. " (" .. #hiddenQ .. ")", B.textHint or "textHint")
-      :SetValue(open and "-" or "+", B.textHint or "textHint"):SetGapBefore(4)
-      :SetOnClick(function() ns.db.trackerHiddenOpen = not ns.db.trackerHiddenOpen or nil ns.UpdateTracker(true) end)
+    local function Toggle() ns.db.trackerHiddenOpen = not ns.db.trackerHiddenOpen or nil ns.UpdateTracker(true) end
+    local r = Style.Row(panel):SetText(L["Hidden quests"] .. " (" .. #hiddenQ .. ")", B.textHint or "textHint")
+      :SetGapBefore(4):SetOnClick(Toggle)
       :SetTooltip(function() return L["Hidden quests"], nil, L["Click: show or hide them."] end)
+    if r.SetFoldButton then r:SetFoldButton(open, Toggle) else r:SetValue(open and "-" or "+", B.textHint or "textHint") end
     if open then
-      for _, e in ipairs(hiddenQ) do RowFor(e, focusID):SetIndent(12) end
+      for _, e in ipairs(hiddenQ) do RowFor(e, focusID):SetIndent(FoldS.IND) end
     end
   end
   -- (18.10., Daniel: "fold single sections of the list, e.g. the finished quests; folded they move down with their
@@ -1370,14 +1665,26 @@ local function Build()
   local folded = type(ns.db.trackerFolded) == "table" and ns.db.trackerFolded or {}
   local foldedLater = {}
   local function Fold(key)
+    local z = key:match("^z:(.*)$")
+    if z then -- (13.11.2026) a zone: folded unless opened; the zone you are in open unless folded by hand
+      if z == here then
+        FoldS.shut = FoldS.shut ~= z and z or nil
+      else
+        local o = type(ns.db.trackerZoneOpen) == "table" and ns.db.trackerZoneOpen or {}
+        o[z] = not o[z] or nil
+        ns.db.trackerZoneOpen = next(o) and o or nil
+      end
+      ns.UpdateTracker(true)
+      return
+    end
     local f = type(ns.db.trackerFolded) == "table" and ns.db.trackerFolded or {}
     f[key] = not f[key] or nil
     ns.db.trackerFolded = next(f) and f or nil
     ns.UpdateTracker(true)
   end
-  local function Head(text, key, count, open)
-    local h = Style.Header(panel, Kit and Kit.Upper(text) or text)
-    if h and h.SetFold then h:SetFold(open, count, function() Fold(key) end) end
+  local function Head(text, key, count, open, fn)
+    local h = Style.Header(panel, (Kit and not Game()) and Kit.Upper(text) or text)
+    if h and h.SetFold then h:SetFold(open, count, fn or function() Fold(key) end) end
     return h
   end
   local function FoldedHeads()
@@ -1387,7 +1694,10 @@ local function Build()
     local done, others = {}, {}
     for _, e in ipairs(list) do
       if e.questID ~= focusID or ns.GuideActive() then
-        if e.complete then done[#done + 1] = e else others[#others + 1] = e end
+        -- (13.11.2026, Daniel: "vll sollte man ready to turn in nicht verstecken sondern ganz natürlich mit in die
+        -- liste?", "vorher hat er ja lieber die 5000yards entfernten angezeigt"; chosen: by distance only) a finished
+        -- quest stands among the others by its distance, no section of its own in this tab any more
+        others[#others + 1] = e
       end
     end
     local function ByDist(a, b)
@@ -1404,14 +1714,19 @@ local function Build()
       for _, e in ipairs(list2) do
         if Take() then
           if not headed then Head(head, key, #list2, true) headed = true end
-          NeedleRow(RowFor(e, focusID), e)
+          -- (13.11.2026, Daniel to two pictures: "bei dem einen gar nicht eingerückt und bei dem style don halbherzig
+          -- eingerückt die + und -") a quest under a head: its button starts where the head's words start
+          local row = RowFor(e, focusID):SetIndent(FoldS.IND)
+          NeedleRow(row, e)
+          -- (13.11.2026) the Don look: the button folds the row's second line away (DonRow)
+          if Game() then QuestLines(e, row) elseif row.SetFoldButton then FoldS.Spot(row, e) end
         end
       end
     end
     -- (02.11.2026, Daniel: "das was fertig ist, sollte nach unten wandern, wenn noch andere quests aktiv sind")
     Group(L["Nearby"], others, "near")
     Group(L["Ready to turn in"], done, "done")
-    if more > 0 then Style.Row(panel):SetText(L["+%d more quests"]:format(more), B.textHint or "textHint") end
+    if more > 0 then Style.Row(panel):SetText(L["+%d more quests"]:format(more), B.textHint or "textHint"):SetIndent(FoldS.IND) end
     if skipped > 0 then Style.Row(panel):SetText(L["%d quests above (scroll up)"]:format(skipped), B.textHint or "textHint") end
     scrollMore = more
     FoldedHeads()
@@ -1434,11 +1749,24 @@ local function Build()
     -- a zone's quests counted for its header; a folded zone goes to the bottom
     local inZone = {}
     if not ns.db.trackerSortLevel then
+      -- (13.11.2026, Daniel: "by zone sollte immer zuerst die zone öffnen, in der man drin ist ansonsten die
+      -- nächstgelegene") that zone's quests first; it is open even when it was folded, until you fold it yourself
+      if here then
+        local first, others = {}, {}
+        for _, e in ipairs(shown) do
+          if (e.zone or L["Other"]) == here then first[#first + 1] = e else others[#others + 1] = e end
+        end
+        for _, e in ipairs(others) do first[#first + 1] = e end
+        shown = first
+      end
       for _, e in ipairs(shown) do local z = e.zone or L["Other"] inZone[z] = (inZone[z] or 0) + 1 end
       local kept = {}
       for _, e in ipairs(shown) do
         local z = e.zone or L["Other"]
-        if folded["z:" .. z] then
+        local open
+        if z == here then open = FoldS.shut ~= z
+        else open = type(ns.db.trackerZoneOpen) == "table" and ns.db.trackerZoneOpen[z] or false end
+        if not open then
           if inZone[z] > 0 then foldedLater[#foldedLater + 1] = { z, "z:" .. z, inZone[z] } inZone[z] = -inZone[z] end
         else kept[#kept + 1] = e end
       end
@@ -1452,34 +1780,26 @@ local function Build()
         local z = zone or L["Other"]
         Head(z, "z:" .. z, inZone[z], true)
       end
-      local row = Style.Row(panel):SetGapBefore(QUEST_GAP) -- (18.10.) the zone and level tabs too
-      -- (02.11.2026) a Don row without the second line: badge, map colour, title; the objectives follow below
-      row:SetText((e.title or "") .. ns.GroupTag(e.questID), e.complete and COMPLETE_TEXT or CREAM)
-      local lv = e.level and e.level > 0 and e.level or nil
-      row:SetBadge("[" .. (lv and tostring(lv) or "?") .. "]", LevelRGB(lv), true) -- (Daniel 02.11.2026) the level in its colour, no box, as on the card
-      row:SetMark(MarkRGB(e.questID))
+      local row = Style.Row(panel):SetGapBefore(Game() and GAME_GAP or QUEST_GAP) -- (18.10.) the zone and level tabs too
+      if not ns.db.trackerSortLevel then row:SetIndent(FoldS.IND) end -- (13.11.2026) under its zone's head, indented
+      if Game() then GameRow(row, e) else
+        -- (02.11.2026) a Don row without the second line: badge, map colour, title; the objectives follow below
+        row:SetText((e.title or "") .. ns.GroupTag(e.questID), e.complete and COMPLETE_TEXT or CREAM)
+        local lv = e.level and e.level > 0 and e.level or nil
+        row:SetBadge("[" .. (lv and tostring(lv) or "?") .. "]", LevelRGB(lv), true) -- (Daniel 02.11.2026) the level in its colour, no box, as on the card
+        row:SetMark(MarkRGB(e.questID))
+      end
+      ns.TrackerItemSpot(row, e.questID)
       row:SetTooltip(function() if ns.HoverQuestRow then ns.HoverQuestRow(row, e.questID) end end) -- (20.10.) marks stand out on the maps
       row:SetOnClick(function(_, button)
+        if ns.TrackerShiftClick(e.questID, button) then return end
         if button == "RightButton" then ShowQuestMenu(e) return end
-        if IsShiftKeyDown and IsShiftKeyDown() then ns.QuestBookOpenQuest(e.questID) return end
         Pick(e.questID)
       end)
-      -- (Questdon review 2) a failed quest and a timed quest's time left in these tabs too
-      local clock = Clock(e)
-      if e.failed then
-        Style.Row(panel):SetText(L["Failed"], "critical"):SetIndent(12)
-      elseif e.complete then
-        local who = TurnInName(e.questID)
-        Style.Row(panel):SetText(who and L["Turn in: %s"]:format(who) or L["Ready to turn in"], "good"):SetIndent(12)
-      else
-        if clock then KeepProgress(Style.Row(panel):SetText(clock):SetIndent(12), e, "clock") end
-        for i, o in ipairs(e.objs) do
-          KeepProgress(Style.Row(panel):SetText(o.text, o.done and "good" or (B.textSecondary or "textSecondary")):SetIndent(12), e, "obj", i)
-        end
-      end
+      QuestLines(e, row)
      end
     end
-    if more > 0 then Style.Row(panel):SetText(L["+%d more quests"]:format(more), B.textHint or "textHint") end
+    if more > 0 then Style.Row(panel):SetText(L["+%d more quests"]:format(more), B.textHint or "textHint"):SetIndent(ns.db.trackerSortLevel and 0 or FoldS.IND) end
     if skipped > 0 then Style.Row(panel):SetText(L["%d quests above (scroll up)"]:format(skipped), B.textHint or "textHint") end
     scrollMore = more
     FoldedHeads()
@@ -1498,6 +1818,7 @@ local function Build()
   Footer()
   panel:Relayout()
   CapToScreen(shown)
+  if ns.SyncListItems then ns.SyncListItems() end -- (12.11.2026) the item buttons to their new rows (not in a fight)
 end
 
 -- the small needles of the rows (5 times a second, no rebuild)
@@ -1721,14 +2042,45 @@ end
 -- (17.10., Daniel: "an option to hide background and borders") trackerPlain: the window without its background,
 -- frame and title bar background, and the quest card without its gold fill and edge; text, compass and the title
 -- bar's buttons stay
+-- (12.11.2026) trackerGame with it: the game look (DonCore Style minor 16, panel:SetGameLook), the head says "Quests",
+-- the card loses its gold mark and line too, and the list is built anew in the other look
+local gameApplied
 function ns.ApplyTrackerChrome()
   local plain = ns.db and ns.db.trackerPlain == true
-  if panel and panel.SetChromeHidden then panel:SetChromeHidden(plain) end
+  local game = Game()
+  if panel then
+    if panel.SetGameLook then panel:SetGameLook(game, plain) elseif panel.SetChromeHidden then panel:SetChromeHidden(plain) end
+    if panel.SetButtonsFaded and not game then panel:SetButtonsFaded(false) end
+    panel:SetTitle(game and (rawget(_G, "QUESTS_LABEL") or L["Quests"]) or "QUESTDON")
+  end
   if card then
     for _, t in ipairs({ card.bg, card.edge[1], card.edge[2], card.edge[3], card.edge[4] }) do
       if plain then t:Hide() else t:Show() end
     end
+    -- (13.11.2026) the gold bar on the left stays in the game look: it marks the picked quest
+    card.mark:Show()
+    if game then card.under:Hide() else card.under:Show() end
   end
+  if gameApplied ~= nil and gameApplied ~= game and panel then lastSig = nil ns.QueueRefresh("tracker") end
+  gameApplied = game
+end
+-- (12.11.2026) the look as one number for the options and the start window: 1 Don, 2 Don without background, 3 like the game
+function ns.TrackerLook()
+  local db = DB()
+  return db.trackerPlain == true and (db.trackerGame == true and 3 or 2) or 1
+end
+function ns.SetTrackerLook(i)
+  local db = ns.db
+  if not db then return end
+  db.trackerPlain, db.trackerGame = (i == 2 or i == 3), (i == 3) or nil
+  ns.ApplyTrackerChrome()
+  ns.UpdateTracker(true)
+  if ns.RefreshSettingsUI then ns.RefreshSettingsUI() end
+end
+-- (12.11.2026) the game look: the head's buttons only while the mouse is over the list (the fold button stays)
+local function FadeButtons()
+  if not (panel and panel.SetButtonsFaded and Game()) then return end
+  panel:SetButtonsFaded(not ns.True(ns.Value(panel.IsMouseOver, panel)))
 end
 
 local function Create()
@@ -1795,7 +2147,12 @@ local function Queue() ns.QueueRefresh("tracker") end
 ns.OnInit(function()
   Create()
   ns.NewTicker(1, function() ns.UpdateTracker() end)     -- distances
-  ns.NewTicker(0.2, function() ns.SafeCall("trackerNeedles", TurnNeedles) end)
+  ns.NewTicker(0.2, function()
+    ns.SafeCall("trackerNeedles", TurnNeedles)
+    ns.SafeCall("trackerButtons", FadeButtons)
+    -- (12.11.2026) the item buttons follow the list: moved, folded, faded, closed (they hang on UIParent, not on it)
+    if ns.SyncListItems then ns.SafeCall("trackerItems", ns.SyncListItems) end
+  end)
   -- (31.10.2026, LEISTUNG_PRUEFUNG B9) no own 0.5 s ticker for Blizzard's tracker any more: ns.UpdateTracker applies it
   -- on every refresh (quest log, zone, bags, group ...) and with the distances every second, which also catches the
   -- game showing it again; PLAYER_REGEN_ENABLED below after a fight

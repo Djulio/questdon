@@ -1,5 +1,20 @@
 # Changes
 
+## 1.7.0
+
+- **Three looks for the quest list:** Don, Don without background and frame, or like the game's own quest list (one line per quest with its level, the objectives below, the distance on the right). A small window asks once which one you like; change it any time in the new **Appearance** tab of the options, which also holds the pin sizes, the arrow and the XP bar.
+- **Item buttons in the quest list:** every quest with a usable item gets a button with that item right beside it, in every look and every tab. Items in your bags that start a quest get their own line on top. The single quest item button is still there as an option.
+- **Fold single quests:** a button left of each quest folds it to its title, in every tab; sections fold the same way and show their count.
+- **Party chat line:** when a quest of yours is ready to turn in, Questdon can say so in party chat with a clickable quest link, and players with Questdon share one line that says who is still open (switch it off with `/qd announce`). In a dungeon it says the quest is completed.
+- **Group progress for everybody:** party members without Questdon show their progress too, read from the game's own quest tooltips; names show as first names in class colours.
+- **Nearby tab:** finished and grey quests of your zone stand between the others by distance, so nothing you still have to hand in hides away.
+- **By zone:** opens the zone you are in (or the nearest) and keeps the others closed until you open them.
+- **Shift-click:** Shift-left-click a quest in the list opens it in the game's quest log, Shift-right-click in the quest book.
+- **Quest book:** shows the quest levels the game gives.
+- **Waypoints from `/way` are kept** for each character across /reload and logout; a click on the main quest's card picks it for the arrow.
+- **New installs start at 100 %** for the list text and the pins; "!" and "?" on the world map are drawn a little smaller next to the other pins. Your own settings stay as they are.
+- **Fixed:** a finished grey quest could miss its "?" on the world map.
+
 ## 1.6.0
 - **Waypoints with `/way`:** `/way 45.2 61.8 Text` sets a marker on the world map and minimap, and the arrow leads you there with your text under it. A zone can go in front (`/way Westfall 45 58`), several `/way` in one line set several, and `/way` alone opens a window to paste a whole list. A waypoint goes when you reach it; right-click a marker to remove it, the ones of the zone or all (`/way clear`). The size of the markers is set under Map, More settings. With TomTom installed, use `/qd way`.
 - **Fewer options:** the settings are down from 56 to 46 controls. Things nobody switched off are fixed now, and a few rarely used ones moved to "More settings".

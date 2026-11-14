@@ -46,6 +46,7 @@ local function Scan(silent)
       elseif state.complete and not old.complete then
         if ns.Active("soundQuest") then PlayFirst(QUEST_SOUND) end
         if ns.db.notifyText then ns.Warn(L["Quest complete: %s"]:format(Text(info.title) or "?")) end
+        if ns.AnnounceQuestDone then ns.AnnounceQuestDone(id, Text(info.title)) end -- (12.11.2026) one line for the group
       elseif old.order == state.order then
         for i, done in ipairs(state.objectives) do
           if done and old.objectives[i] == false then

@@ -1511,9 +1511,19 @@ local DOT = { done = "green", log = "yellow", available = "blue", later = "grey"
 
 local function FocusID() return ns.zoneFocus and ns.zoneFocus.questID end
 
+-- (13.11.2026, Daniel: "questlevel im questdonbuch ist niedriger als die quests eigentlich sind ... will aber lieber die
+-- blizzard questlevel da drin") the level a row and the detail card show: the game's own level of the quest (as in
+-- the quest log and the quest list), else the level you may take it at. Sorting and "from level" keep the minimum level.
+function UI.ShownLevel(questID, fallback)
+  local lv = ns.GameQuestLevel and ns.GameQuestLevel(questID)
+  if lv and lv > 0 then return lv end
+  return fallback
+end
+ns.QuestBookShownLevel = UI.ShownLevel -- (tests)
+
 local function QuestItem(e, extra)
   local stateText, stateColor = Pill(e)
-  local it = { kind = "quest", h = ROW_H, questID = e.questID, level = e.level, title = e.title or ns.QuestTitle(e.questID),
+  local it = { kind = "quest", h = ROW_H, questID = e.questID, level = UI.ShownLevel(e.questID, e.level), title = e.title or ns.QuestTitle(e.questID),
     sub = QuestSub(e), group = e.group, stateText = stateText, stateColor = stateColor, quiet = e.group == "done" or e.group == "later",
     active = FocusID() == e.questID or ns.QuestBookDetailID() == e.questID, tooltip = ns.ZoneQuestTooltip(e) }
   -- (1.3.5, Daniel 08.10. Merkliste) a click shows the detail card only, the arrow stays where it
@@ -1650,7 +1660,7 @@ local function ZoneQuestItems(m)
           local title = L["Part %d of %d"]:format(i, #parts)
           if done then title = title .. "  " .. Colorize(L["Completed"], "good") end
           items[#items + 1] = QuestItem(p, { indent = (indent or 0) + KS.indent, chain = tostring(i), title = title,
-            level = p.level, part = true, chainDone = done or nil })
+            level = UI.ShownLevel(p.questID, p.level), part = true, chainDone = done or nil })
         end
       end
     end
@@ -3158,7 +3168,8 @@ function UI.RenderDetail()
   local id = UI.detailID
   local q = ns.QuestBookDetail(id)
   local group = ns.ZoneQuestStatus(id)
-  local lv = q.level and q.level > 0 and q.level or nil
+  local lv = UI.ShownLevel(id, q.level)
+  lv = lv and lv > 0 and lv or nil
   local meta = {}
   local yd = UI.Yards(id)
   if yd then meta[#meta + 1] = L["%d yards"]:format(yd) end

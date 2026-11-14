@@ -16,7 +16,7 @@ local MEDIA = "Interface\\AddOns\\Questdon\\Media\\"
 local TAB_ICONS = { map = "Interface\\Icons\\INV_Misc_Map_01", list = "Interface\\Icons\\INV_Misc_Note_01",
   accept = "Interface\\Icons\\INV_Letter_15", xp = "Interface\\Icons\\Spell_Holy_SurgeOfLight",
   comfort = "Interface\\Icons\\INV_Misc_Bag_08", share = "Interface\\Icons\\INV_Misc_GroupNeedMore",
-  help = "Interface\\Icons\\INV_Misc_QuestionMark" }
+  help = "Interface\\Icons\\INV_Misc_QuestionMark", look = "Interface\\Icons\\INV_Misc_Spyglass_03" }
 
 -- the tabs: main switches first, the rest under "More settings"; buttons by their name; "tools" from the tool list
 local TABS = {
@@ -28,27 +28,39 @@ local TABS = {
     -- down to 52, the hidden ones from 54 to 29; what we decide as developers is in ns.FIXED_OPTIONS (Options.lua)
     -- (10.11.2026, Daniel: the whole proposal) 25 main switches down to 18, 56 controls down to 47
     main = { "availablePins", "objectivePins", "learnPins", "minimapPins", "servicePins" },
-    more = { "showLowLevel", "objectivePinsTrackedOnly", "objectiveIcons", "hideGamePOIs", "dungeonPins",
-      "nameplateIcons", "minimapTrackedOnly", "mapPinScale", "minimapPinScale", "wayPinScale", "minimapButton" } },
+    more = { "showLowLevel", "objectivePinsTrackedOnly", "hideGamePOIs", "dungeonPins",
+      "nameplateIcons", "minimapTrackedOnly", "minimapButton" } },
   { key = "list", title = "Quest list and arrow", pic = "opt_list",
     text = "Your quests in Questdon's list with a compass, and the arrow that leads you to the next objective.",
     -- (25.10., Daniel: "you cannot tell at first sight which option is for the list and which for the arrow") headers
     main = { "header:Quest list", "tracker",
       "header:Direction arrow", "wayMode" },
-    more = { "header:Quest list", "trackerPlain", "trackerHideGrey", "trackerScale",
-      "header:Direction arrow", "arrowPlain", "arrowLocked", "arrowScale", "button:arrow",
+    more = { "header:Quest list", "trackerHideGrey",
+      "header:Direction arrow", "arrowLocked", "button:arrow",
       "header:Targeting and waypoints", "targetButton", "exportTomTom" } },
+  -- (12.11.2026, Daniel: "einen Reiter ... der nur das Aussehen von Questdon inne hat. Also Liste, Pins, XP Leiste",
+  -- gewaehlt: with the arrow) what only changes how Questdon looks; on and off and what things do stay in their tabs
+  { key = "look", title = "Look", pic = "opt_list",
+    text = "How Questdon looks: the quest list, the pins on the map, the arrow and the XP bar. What they do is in the other tabs.",
+    -- the three that change the picture most up front; sizes and the arrow under "More settings" (10.11.: short main pages)
+    main = { "header:Quest list", "trackerLook",
+      "header:Map", "objectiveIcons",
+      "header:XP bar", "xpBarText" },
+    more = { "header:Quest list", "trackerScale",
+      "header:Map", "mapPinScale", "minimapPinScale", "wayPinScale",
+      "header:Direction arrow", "arrowPlain", "arrowScale",
+      "header:XP bar", "xpBarScale", "xpBarWidth" } },
   { key = "accept", title = "Accept and turn in", pic = "opt_accept",
     text = "Quests taken and turned in for you, the reward that suits you marked, a sound when something is done.",
-    main = { "autoAccept", "autoTurnIn", "notifySound" },
+    main = { "autoAccept", "autoTurnIn", "notifySound", "partyAnnounce" },
     more = { "notifyText", "shareQuests" } },
   { key = "xp", title = "XP bar", pic = "opt_xp",
     text = "Questdon's experience bar: XP, rested XP, finished quests, XP per hour and the time to the next level.",
     main = { "xpBar" },
-    more = { "xpBarText", "xpBarLocked", "xpBarScale", "xpBarWidth", "button:xp" } },
+    more = { "xpBarLocked", "button:xp" } },
   { key = "comfort", title = "Comfort", pic = "opt_comfort",
     text = "Small helpers: sell junk and repair at a merchant, fast loot, a button for quest items, and the journal.",
-    main = { "sellJunk", "autoRepair", "fastLoot", "questItemButton" },
+    main = { "sellJunk", "autoRepair", "fastLoot", "trackerItemButtons", "questItemButton" },
     more = { "useGuildRepair", "journalShots", "journalMoments", "journalLevelShot" } },
   { key = "share", title = "Sharing and data", pic = "opt_share",
     text = "What Questdon learns while you play and shares with other Questdon players (only quest and map numbers, never names).",

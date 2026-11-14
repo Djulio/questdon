@@ -10,8 +10,50 @@ local L = ns.L
 ---------------------------------------------------------------------------
 local SETUP_VERSION = 1
 local MEDIA = "Interface\\AddOns\\Questdon\\Media\\"
-local W, CARD_W, CARD_H, PIC_W, PIC_H = 720, 212, 214, 196, 98
+-- (12.11.2026, Daniel: "Das Anfangsfenster zur Auswahl sieht noch aus, wie die ersten Fenster von Questdon") both
+-- windows of this file are DonCore Kit dialogs now (Kit.Dialog, Kit.Tile as the cards to click, Kit.OptionRow with
+-- Kit.Toggle, Kit.Button), like the options and the quest book; nothing of the old Style panel is left here
+local Kit = LibStub("DonCore-1.0"):Get("Kit", 16)
+local W, CARD_H, GAP = 720, 250, 8
 local frame, cards, switchRows = nil, {}, {}
+
+-- a card to click (Kit.Tile: card colours, gold edge, selected state): an optional picture (2:1), a title, a text on
+-- several lines. c:Place(w) lays it out.
+local function ChoiceCard(parent, title, text, height, pic, onClick)
+  local c = Kit.Tile(parent, { height = height, onClick = onClick })
+  if pic then
+    c.pic = c:CreateTexture(nil, "ARTWORK")
+    c.pic:SetTexture(pic)
+    if c.pic.SetTexCoord then c.pic:SetTexCoord(0, 1, 0, 1) end
+  end
+  c.title = Kit.Text(c, "row", Kit.C.title)
+  c.title:SetText(title)
+  c.text = Kit.Text(c, "sub", Kit.C.muted)
+  if c.text.SetWordWrap then c.text:SetWordWrap(true) end
+  if c.text.SetMaxLines then c.text:SetMaxLines(8) end
+  if c.text.SetJustifyV then c.text:SetJustifyV("TOP") end
+  c.text:SetText(text)
+  function c:Place(w)
+    self:Layout(w)
+    local y = 10
+    -- (12.11.2026) a drawn picture (the list look's preview): c.draw(card, width, y) lays it out and returns its height
+    if self.draw then y = y + self.draw(self, w - 16, y) + 8 end
+    if self.pic then
+      local pw = w - 16
+      self.pic:ClearAllPoints()
+      self.pic:SetPoint("TOP", self, "TOP", 0, -y)
+      self.pic:SetSize(pw, math.floor(pw / 2))
+      y = y + math.floor(pw / 2) + 8
+    end
+    self.title:ClearAllPoints()
+    self.title:SetPoint("TOPLEFT", self, "TOPLEFT", 10, -y)
+    Kit.Fit(self.title, w - 20)
+    self.text:ClearAllPoints()
+    self.text:SetPoint("TOPLEFT", self, "TOPLEFT", 10, -(y + 18))
+    self.text:SetWidth(w - 20)
+  end
+  return c
+end
 
 -- the three map styles: the option values each one sets
 -- (17.10., Daniel: "with the game's map picked the game's areas were gone anyway; three choices: the game's own
@@ -61,16 +103,8 @@ end
 
 local function Refresh()
   local cur = ns.SetupStyle()
-  for _, c in ipairs(cards) do
-    local on = c.style.key == cur
-    c.ring:SetShown(on)
-    c.title:SetTextColor(on and 1 or 0.92, on and 0.82 or 0.92, on and 0 or 0.92)
-  end
-  for _, r in ipairs(switchRows) do
-    local on = ns.db[r.item.key] and true or false
-    if r.item.dataOnly then on = ns.DataOnly() end
-    r:SetValue(on and L["on"] or L["off"], on and "good" or "textHint")
-  end
+  for _, c in ipairs(cards) do c:SetSelected(c.style.key == cur) end
+  for _, r in ipairs(switchRows) do r.control:Update() end
 end
 
 function ns.ApplySetupStyle(key)
@@ -97,10 +131,10 @@ local DATA_ONLY = {
   dungeonPins = false, dungeonPinsMinimap = false, learnPins = false, hideGamePOIs = false, unitTooltips = false, servicePins = false,
   -- windows: quest list, arrow, XP bar, quest item and target buttons
   tracker = false, arrow = false, arrowNext = false, pathDots = false, arrowCorpse = false, xpBar = false,
-  ownRepBar = false, questItemButton = false, targetButton = false, exportTomTom = false,
+  ownRepBar = false, questItemButton = false, trackerItemButtons = false, targetButton = false, exportTomTom = false,
   -- automation, hints and sounds
   autoAccept = false, autoTurnIn = false, highlightBest = false, suggestReward = false,
-  chainHint = false, shareQuests = false, dungeonHint = false, notifySound = false, notifyText = false,
+  chainHint = false, shareQuests = false, partyAnnounce = false, dungeonHint = false, notifySound = false, notifyText = false,
   sellJunk = false, autoRepair = false, fastLoot = false, journalShots = false, journalLevelShot = false,
 }
 ns.DATA_ONLY = DATA_ONLY -- (tests)
@@ -158,94 +192,60 @@ local function ToggleSwitch(item)
     ns.OptionChanged(item.key)
     if item.also then ns.OptionChanged(item.also) end
   end
+  -- (12.11.2026) the options show this switch as the choice "Look of the quest list" now (trackerLook): applied here
+  if item.key == "trackerPlain" and ns.ApplyTrackerChrome then ns.ApplyTrackerChrome() end
   Refresh()
 end
 ns.SetupToggle = ToggleSwitch -- (tests)
 
-local function Card(parent, style, x)
-  local c = CreateFrame("Button", nil, parent)
-  c.style = style
-  c:SetSize(CARD_W, CARD_H)
-  c:SetPoint("TOPLEFT", parent, "TOPLEFT", x, 0)
-  local bg = c:CreateTexture(nil, "BACKGROUND")
-  bg:SetTexture("Interface\\Buttons\\WHITE8x8")
-  bg:SetAllPoints(c)
-  bg:SetVertexColor(1, 1, 1, 0.05)
-  c.hover = c:CreateTexture(nil, "BACKGROUND", nil, 1)
-  c.hover:SetTexture("Interface\\Buttons\\WHITE8x8")
-  c.hover:SetAllPoints(c)
-  c.hover:SetVertexColor(1, 1, 1, 0.06)
-  c.hover:Hide()
-  -- the chosen card: a frame in the accent colour
-  c.ring = CreateFrame("Frame", nil, c)
-  c.ring:SetAllPoints(c)
-  local ac = ns.Style.COLORS.accent or { 0.25, 0.66, 0.96 }
-  for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 2 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 2 },
-      { "TOPLEFT", "BOTTOMLEFT", 2, nil }, { "TOPRIGHT", "BOTTOMRIGHT", 2, nil } }) do
-    local t = c.ring:CreateTexture(nil, "OVERLAY")
-    t:SetTexture("Interface\\Buttons\\WHITE8x8")
-    t:SetVertexColor(ac[1], ac[2], ac[3], 1)
-    t:SetPoint(side[1], c.ring, side[1], 0, 0)
-    t:SetPoint(side[2], c.ring, side[2], 0, 0)
-    if side[3] then t:SetWidth(side[3]) else t:SetHeight(side[4]) end
-  end
-  c.ring:Hide()
-  c.pic = c:CreateTexture(nil, "ARTWORK")
-  c.pic:SetSize(PIC_W, PIC_H)
-  c.pic:SetPoint("TOP", c, "TOP", 0, -8)
-  c.pic:SetTexture(MEDIA .. style.pic)
-  if c.pic.SetTexCoord then c.pic:SetTexCoord(0, 1, 0, 1) end
-  c.title = ns.Look.Font(c, "GameFontNormal", "textPrimary")
-  c.title:SetPoint("TOPLEFT", c.pic, "BOTTOMLEFT", 0, -8)
-  c.title:SetText(L[style.title])
-  c.text = ns.Look.Font(c, "GameFontHighlightSmall", "textSecondary")
-  c.text:SetPoint("TOPLEFT", c.title, "BOTTOMLEFT", 0, -4)
-  c.text:SetWidth(PIC_W)
-  c.text:SetJustifyH("LEFT")
-  if c.text.SetWordWrap then c.text:SetWordWrap(true) end
-  c.text:SetText(L[style.text])
-  c:SetScript("OnEnter", function(self) self.hover:Show() end)
-  c:SetScript("OnLeave", function(self) self.hover:Hide() end)
-  c:SetScript("OnClick", ns.Guard("setup", function(self) ns.ApplySetupStyle(self.style.key) end))
-  return c
+-- the hint left of a dialog's buttons
+local function FootHint(d, text)
+  local fs = Kit.Text(d, "sub", Kit.C.quiet)
+  fs:SetText(text)
+  fs:SetPoint("BOTTOMLEFT", d, "BOTTOMLEFT", 12, 18)
+  Kit.Fit(fs, math.max(40, d:BodyWidth() - 140))
+  return fs
 end
 
 local function Create()
-  local Style = ns.Style
-  frame = Style.Panel("QuestdonSetup", UIParent, {
-    title = Style.Wordmark("Quest", "don"),
-    width = W,
-    close = true,
-    closeTooltip = { L["Close"], nil, L["Esc also closes the window."] },
-    strata = "DIALOG",
-    get = function() return nil end,
-    set = function() end,
-    defaultPoint = { "CENTER", "CENTER", 0, 40 },
-    onClose = function(p) p:Hide() end,
-  })
-  frame:EnableMouse(true)
-  local intro = Style.Row(frame)
-  intro:SetText(L["Welcome! How should Questdon show your quests on the world map?"], "textPrimary")
-  local holder = CreateFrame("Frame", nil, frame)
-  holder:SetSize(W - 2 * Style.SPACING.padX, CARD_H)
-  local gap = (W - 2 * Style.SPACING.padX - #STYLES * CARD_W) / (#STYLES - 1)
-  for i, st in ipairs(STYLES) do cards[i] = Card(holder, st, (i - 1) * (CARD_W + gap)) end
-  Style.Content(frame, holder, CARD_H, { gapBefore = Style.SPACING.section })
-  Style.Header(frame, L["Also useful"])
+  frame = Kit.Dialog("QuestdonSetup", { title = "Questdon", width = W, height = 300,
+    onClose = function() if ns.ListLookMaybe then ns.After(0.5, ns.ListLookMaybe) end end })
+  frame:SetButtons({ { text = L["Done"], kind = "primary", onClick = function(d) d:Hide() end } })
+  local body, bw = frame.body, frame:BodyWidth()
+  local intro = Kit.Text(body, "row", Kit.C.title)
+  intro:SetPoint("TOPLEFT", body, "TOPLEFT", 0, 0)
+  intro:SetText(L["Welcome! How should Questdon show your quests on the world map?"])
+  Kit.Fit(intro, bw)
+  local y = 26
+  local cw = math.floor((bw - (#STYLES - 1) * GAP) / #STYLES)
+  for i, st in ipairs(STYLES) do
+    local c = ChoiceCard(body, L[st.title], L[st.text], CARD_H, MEDIA .. st.pic, ns.Guard("setup", function() ns.ApplySetupStyle(st.key) end))
+    c.style = st
+    c:SetPoint("TOPLEFT", body, "TOPLEFT", (i - 1) * (cw + GAP), -y)
+    c:Place(cw)
+    cards[i] = c
+  end
+  y = y + CARD_H + 14
+  local head = Kit.Text(body, "sub", Kit.C.muted)
+  head:SetPoint("TOPLEFT", body, "TOPLEFT", 0, -y)
+  head:SetText(Kit.Upper(L["Also useful"]))
+  y = y + 20
   for _, item in ipairs(SWITCHES) do
-    local r = Style.Row(frame)
+    local toggle = Kit.Toggle(body, {
+      get = function()
+        if item.dataOnly then return ns.DataOnly() end
+        return ns.db[item.key] and true or false
+      end,
+      set = ns.Guard("setup", function() ToggleSwitch(item) end) })
+    local r = Kit.OptionRow(body, { label = L[item.name], control = toggle })
     r.item = item
-    r:SetText(L[item.name], "textPrimary")
-    r:SetOnClick(ns.Guard("setup", function(self) ToggleSwitch(self.item) end))
+    r:SetPoint("TOPLEFT", body, "TOPLEFT", 0, -y)
+    r:Layout(bw)
+    y = y + (r:GetHeight() or 36)
     switchRows[#switchRows + 1] = r
   end
-  local done = Style.Row(frame)
-  done:SetGapBefore(Style.SPACING.section)
-  done:SetText(L["Done"], "accent")
-  done:SetValue(L["Everything can be changed later with /qd."], "textHint")
-  done:SetOnClick(ns.Guard("setup", function() frame:Hide() end))
-  if type(UISpecialFrames) == "table" then table.insert(UISpecialFrames, "QuestdonSetup") end
-  frame:Hide()
+  frame:SetBodySize(bw, y + 4)
+  frame.hint = FootHint(frame, L["Everything can be changed later with /qd."])
 end
 
 function ns.OpenSetup()
@@ -254,9 +254,9 @@ function ns.OpenSetup()
   ns.db.setupVersion = SETUP_VERSION
   Refresh()
   frame:Show()
-  if ns.Style.Relayout then ns.Style.Relayout(frame) end
 end
 function ns.SetupFrame() return frame end -- (tests)
+function ns.SetupParts() return cards, switchRows end -- (tests)
 
 -- once per account, a few seconds after the first login with this version (not in combat: then after it)
 local pending = false
@@ -271,3 +271,220 @@ ns.On("PLAYER_ENTERING_WORLD", function(_, isLogin, isReload)
 end)
 ns.On("PLAYER_REGEN_ENABLED", function() if pending then ns.After(1, Maybe) end end)
 ns.SetupMaybe = Maybe -- (tests)
+
+---------------------------------------------------------------------------
+-- (12.11.2026, Daniel: "Zum Start der neuen Liste gerne ein Auswahlfeld, welche Liste man nehmen moechte, danach in den
+-- Optionen"; gewaehlt: everybody once, a small window of its own) Which look the quest list shall have: Don, Don without
+-- background, like the game (Tracker.lua ns.SetTrackerLook). Shown once per account (listLookAsked), after the start
+-- window, out of combat, only while the list is on. A click changes the real list at once, so no example pictures.
+---------------------------------------------------------------------------
+local LOOK_ASK = 1
+local LOOKS = {
+  { title = "Don", text = "Questdon's own window with background and frame." },
+  { title = "Don, no background", text = "The same without background and frame: only text, compass and buttons." },
+  { title = "Like the game", text = "Reads like the game's own quest list: plain text in the game's colours, the objectives under each quest." },
+}
+ns.LIST_LOOKS = LOOKS -- (tests)
+local lookFrame, lookCards = nil, {}
+-- (12.11.2026, Daniel: "iteriere ... das neue setup fenster der quesliste das wirkt noch so lieblos") three cards side by
+-- side like the start window, each with a small quest list drawn in its look (two quests of your own log, over a strip of
+-- "game world", so the see-through looks show what they are), the chosen one marked
+-- (12.11.2026, Daniel's picture: "sieht jetzt nicht so gut aus") the band of "ground" cut through the text, the list sat
+-- small in a corner, the mark hung loose: now one soft gradient as the world, the list fills the picture with three
+-- quests, the mark sits in the picture's corner and the cards are as high as their content
+local LOOK_W, LOOK_H, PREVIEW_H = 720, 222, 140
+local WORLD_TOP, WORLD_BOTTOM = { 0.20, 0.27, 0.31 }, { 0.09, 0.11, 0.10 }
+local N_SAMPLES = 3
+local DOTS = { { 0.25, 0.66, 0.96 }, { 0.96, 0.62, 0.20 } }
+local GAME_GOLD, GAME_OPEN, GAME_DONE = { 1, 0.82, 0 }, { 0.8, 0.8, 0.8 }, { 0.5, 0.5, 0.5 }
+
+-- Two quests to show: from the quest log, else two every client knows.
+local function Samples()
+  local out = {}
+  for _, info in ipairs(ns.QuestLogEntries and ns.QuestLogEntries() or {}) do
+    if #out >= N_SAMPLES then break end
+    local title = type(info.title) == "string" and ns.Usable(info.title) and info.title ~= "" and info.title
+    if title then
+      local line, done
+      for _, o in ipairs(ns.ClientObjectives and ns.ClientObjectives(info.questID) or {}) do
+        if type(o) == "table" and type(o.text) == "string" and ns.Usable(o.text) and o.text ~= "" then
+          line, done = o.text, ns.True(o.finished)
+          break
+        end
+      end
+      out[#out + 1] = { title = title, line = line, done = done }
+    end
+  end
+  for _, spare in ipairs({ { id = 33, line = "5/8" }, { id = 7, line = "8/8", done = true }, { id = 15, line = "0/1" } }) do
+    if #out < N_SAMPLES then out[#out + 1] = { title = ns.QuestTitle(spare.id), line = spare.line, done = spare.done } end
+  end
+  return out
+end
+ns.ListLookSamples = Samples -- (tests)
+
+local function GameText(parent, color)
+  local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  fs:SetTextColor(color[1], color[2], color[3], 1)
+  if fs.SetJustifyH then fs:SetJustifyH("LEFT") end
+  if fs.SetWordWrap then fs:SetWordWrap(false) end
+  if fs.SetShadowOffset then fs:SetShadowOffset(1, -1) end
+  if fs.SetShadowColor then fs:SetShadowColor(0, 0, 0, 1) end
+  return fs
+end
+
+-- The preview of look i (1 Don, 2 Don without background, 3 like the game) on a card; returns the card's draw function.
+local function Preview(card, look)
+  local pv = CreateFrame("Frame", nil, card)
+  pv.look = look
+  -- the game world behind the list: one soft gradient, lighter on top
+  pv.bg = Kit.Tex(pv, "BACKGROUND", WORLD_BOTTOM)
+  pv.bg:SetAllPoints(pv)
+  if pv.bg.SetGradient and type(CreateColor) == "function" then
+    pcall(pv.bg.SetVertexColor, pv.bg, 1, 1, 1, 1)
+    pcall(pv.bg.SetGradient, pv.bg, "VERTICAL", CreateColor(WORLD_BOTTOM[1], WORLD_BOTTOM[2], WORLD_BOTTOM[3], 1),
+      CreateColor(WORLD_TOP[1], WORLD_TOP[2], WORLD_TOP[3], 1))
+  end
+  Kit.Border(pv, Kit.C.divider)
+  -- the list itself fills the picture: a panel with head for "Don", only its texts for the other two
+  pv.list = CreateFrame("Frame", nil, pv)
+  if look == 1 then
+    Kit.Fill(pv.list, Kit.C.window)
+    Kit.Border(pv.list, Kit.C.gold)
+    pv.headBg = Kit.Tex(pv.list, "BORDER", Kit.C.panel)
+    pv.headBg:SetPoint("TOPLEFT", 1, -1) pv.headBg:SetPoint("TOPRIGHT", -1, -1)
+    pv.headBg:SetHeight(18)
+  end
+  if look == 3 then
+    pv.head = GameText(pv.list, GAME_GOLD)
+    pv.head:SetText(type(QUESTS_LABEL) == "string" and QUESTS_LABEL or L["Quests"])
+  else
+    pv.head = Kit.Text(pv.list, "sub", Kit.C.goldBright)
+    pv.head:SetText("Questdon")
+  end
+  pv.rows = {}
+  for i = 1, N_SAMPLES do
+    local r = {}
+    if look == 3 then
+      r.title = GameText(pv.list, GAME_GOLD)
+      r.line = GameText(pv.list, GAME_OPEN)
+    else
+      r.dot = Kit.Tex(pv.list, "ARTWORK", DOTS[(i - 1) % #DOTS + 1])
+      r.dot:SetSize(6, 6)
+      r.title = Kit.Text(pv.list, "sub", Kit.C.title)
+      r.line = Kit.Text(pv.list, "sub", Kit.C.muted)
+    end
+    pv.rows[i] = r
+  end
+  card.preview = pv
+  return function(self, w, top)
+    pv:ClearAllPoints()
+    pv:SetPoint("TOP", self, "TOP", 0, -top)
+    pv:SetSize(w, PREVIEW_H)
+    local lw = w - 16
+    pv.list:ClearAllPoints()
+    pv.list:SetPoint("TOPLEFT", pv, "TOPLEFT", 8, -8)
+    pv.list:SetSize(lw, PREVIEW_H - 16)
+    local pad = 8
+    pv.head:ClearAllPoints()
+    pv.head:SetPoint("TOPLEFT", pv.list, "TOPLEFT", pad, -4)
+    Kit.Fit(pv.head, lw - 2 * pad)
+    local samples = Samples()
+    local y = 24
+    for i, r in ipairs(pv.rows) do
+      local q = samples[i] or {}
+      local x = pad
+      if r.dot then
+        r.dot:ClearAllPoints()
+        r.dot:SetPoint("TOPLEFT", pv.list, "TOPLEFT", pad, -(y + 4))
+        x = pad + 11
+      end
+      r.title:ClearAllPoints()
+      r.title:SetPoint("TOPLEFT", pv.list, "TOPLEFT", x, -y)
+      r.title:SetText(q.title or "")
+      Kit.Fit(r.title, lw - x - pad)
+      r.line:ClearAllPoints()
+      r.line:SetPoint("TOPLEFT", pv.list, "TOPLEFT", x + (look == 3 and 4 or 0), -(y + 13))
+      r.line:SetText(q.line and ((look == 3 and "- " or "") .. q.line) or "")
+      if look == 3 then
+        local c = q.done and GAME_DONE or GAME_OPEN
+        r.line:SetTextColor(c[1], c[2], c[3], 1)
+      else
+        Kit.TextColor(r.line, q.done and Kit.C.green or Kit.C.muted)
+      end
+      Kit.Fit(r.line, lw - x - pad - (look == 3 and 4 or 0))
+      y = y + 34
+    end
+    return PREVIEW_H
+  end
+end
+
+local function LookRefresh()
+  local cur = ns.TrackerLook and ns.TrackerLook() or 1
+  for i, c in ipairs(lookCards) do
+    c:SetSelected(i == cur)
+    if c.mark then if i == cur then c.mark:Show() else c.mark:Hide() end end
+  end
+end
+-- lays a card out
+local function LookPlace(c, w)
+  c:Place(w)
+  Kit.Fit(c.title, w - 20)
+end
+local function LookCreate()
+  lookFrame = Kit.Dialog("QuestdonListLook", { title = "Questdon", width = LOOK_W, height = 300 })
+  lookFrame:SetButtons({ { text = L["Done"], kind = "primary", onClick = function(d) d:Hide() end } })
+  local body, bw = lookFrame.body, lookFrame:BodyWidth()
+  local intro = Kit.Text(body, "row", Kit.C.title)
+  intro:SetPoint("TOPLEFT", body, "TOPLEFT", 0, 0)
+  intro:SetText(L["New: how should your quest list look?"])
+  Kit.Fit(intro, bw)
+  local sub = Kit.Text(body, "sub", Kit.C.muted)
+  sub:SetPoint("TOPLEFT", body, "TOPLEFT", 0, -20)
+  sub:SetText(L["Click one: the quest list changes at once, so you can compare."])
+  Kit.Fit(sub, bw)
+  local y = 44
+  local cw = math.floor((bw - (#LOOKS - 1) * GAP) / #LOOKS)
+  for i, look in ipairs(LOOKS) do
+    local pick = ns.Guard("setup", function() if ns.SetTrackerLook then ns.SetTrackerLook(i) end LookRefresh() end)
+    local c = ChoiceCard(body, L[look.title], L[look.text], LOOK_H, nil, pick)
+    c.pick = pick
+    c.draw = Preview(c, i)
+    -- the chosen look says so in its corner
+    c.mark = Kit.Pill(c, L["Picked"], "ready")
+    c.mark:SetPoint("BOTTOMRIGHT", c.preview, "BOTTOMRIGHT", -6, 6) -- in the picture's corner
+    if c.mark.SetFrameLevel and c.preview.GetFrameLevel then c.mark:SetFrameLevel((c.preview:GetFrameLevel() or 1) + 5) end
+    c.mark:Hide()
+    c:SetPoint("TOPLEFT", body, "TOPLEFT", (i - 1) * (cw + GAP), -y)
+    LookPlace(c, cw)
+    lookCards[i] = c
+  end
+  y = y + LOOK_H + GAP
+  lookFrame.cards = lookCards -- (tests)
+  lookFrame:SetBodySize(bw, y)
+  lookFrame.hint = FootHint(lookFrame, L["You find this later under /qd, tab Look."])
+end
+function ns.OpenListLook()
+  if InCombatLockdown() then ns.Print(L["Options cannot be opened in combat."]) return end
+  if not lookFrame then LookCreate() end
+  ns.db.listLookAsked = LOOK_ASK
+  for _, c in ipairs(lookCards) do if c._w then LookPlace(c, c._w) end end -- the previews with the log as it is now
+  LookRefresh()
+  lookFrame:Show()
+end
+function ns.ListLookFrame() return lookFrame end -- (tests)
+local lookPending = false
+local function MaybeLook()
+  local db = ns.db
+  if not db or (tonumber(db.listLookAsked) or 0) >= LOOK_ASK then return end
+  if db.tracker == false then return end -- the list is off: asked when it is on at a later login
+  -- the start window first: this one comes when that is done and gone
+  if (tonumber(db.setupVersion) or 0) < SETUP_VERSION or (frame and frame:IsShown()) then lookPending = true return end
+  if InCombatLockdown() then lookPending = true return end
+  lookPending = false
+  ns.OpenListLook()
+end
+ns.ListLookMaybe = MaybeLook -- (tests)
+ns.On("PLAYER_ENTERING_WORLD", function(_, isLogin, isReload)
+  if isLogin or isReload or isLogin == nil then ns.After(6, MaybeLook) end
+end)
+ns.On("PLAYER_REGEN_ENABLED", function() if lookPending then ns.After(2, MaybeLook) end end)

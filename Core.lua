@@ -128,12 +128,10 @@ frame:SetScript("OnEvent", function(_, event, ...)
       -- (04.11.2026, Era-Test, Daniel: "questdon die einstellungen für die größe als standart") pin sizes 60 % on the
       -- world map and 85 % on the minimap by default; the old default 100 % was written into the saved settings at the
       -- first start, so once: who still has exactly 100 % gets the new size, a size moved on the slider stays
-      if not QuestdonDB.pinScaleV0411 then
-        local function Old(v) return v == nil or tonumber(v) == 1 end
-        if Old(QuestdonDB.mapPinScale) then QuestdonDB.mapPinScale = 0.6 end
-        if Old(QuestdonDB.minimapPinScale) then QuestdonDB.minimapPinScale = 0.85 end
-        QuestdonDB.pinScaleV0411 = true
-      end
+      -- (12.11.2026, Daniel on the laptop: "pin sizes und schrift auf 100% als standard bei neuinstallation") the default
+      -- is 100 % again, so this step moves nobody any more: who got 60 % and 85 % then keeps them, a new install and
+      -- settings that never ran it stay at 100 %
+      if not QuestdonDB.pinScaleV0411 then QuestdonDB.pinScaleV0411 = true end
       -- (28.10.2026, Daniel: "Sachen vorgeben, weil wir sind die Entwickler") the options no longer in the window: once to
       -- the value we chose (Options.lua ns.FIXED_OPTIONS)
       if ns.ApplyFixedOptions then ns.ApplyFixedOptions(QuestdonDB) end
@@ -239,8 +237,20 @@ SlashCmdList.QUESTDON = ns.Guard("slash", function(msg)
   elseif msg == "dungeons" or msg == "dungeon" then
     -- (04.11.2026, Era-Test, Daniel: "das scheint noch im alten stil") the quest book on its "dungeons" tab
     if ns.OpenQuestBook then ns.OpenQuestBook("dungeons") elseif ns.OpenDungeons then ns.OpenDungeons() end
+  elseif msg == "group raw" then
+    -- (12.11.2026) the game's own lines about the group's quest progress, to check Party.lua's reading
+    if ns.PartyRaw then ns.PartyRaw() end
   elseif msg == "group" or msg == "party" then
     if ns.PrintParty then ns.PrintParty() end
+  elseif msg == "look" then
+    -- (12.11.2026) the window with the three looks of the quest list (Setup.lua), any time
+    if ns.OpenListLook then ns.OpenListLook() end
+  elseif msg == "announce test" then
+    -- (12.11.2026) shows the party chat lines of the quests in your log in your own chat, nothing is sent
+    if ns.AnnounceTest then ns.AnnounceTest() end
+  elseif msg == "announce" then
+    -- (12.11.2026) the line for the group when a quest is ready, on and off (Announce.lua)
+    if ns.ToggleAnnounce then ns.ToggleAnnounce() end
   elseif msg == "nothere" then
     if ns.ReportTarget then ns.ReportTarget() end
   elseif msg == "nothere undo" then

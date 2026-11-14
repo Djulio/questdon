@@ -654,7 +654,7 @@ ns.QuestProgressText = Progress
 local function GroupStates(id)
   local out = {}
   if not (ns.PartyProgress and ns.PartyStateText) then return out end
-  for _, p in ipairs(ns.PartyProgress(id)) do out[#out + 1] = L["%s %s (player and quest state)"]:format(p.name, ns.PartyStateText(p)) end
+  for _, p in ipairs(ns.PartyProgress(id)) do out[#out + 1] = L["%s %s (player and quest state)"]:format(p.text or p.name, ns.PartyStateText(p)) end
   return out
 end
 
@@ -806,7 +806,7 @@ function ns.DungeonTooltipLines(overview)
       local m = ns.QuestStart(id)
       local info = m and C_Map and ns.Value(C_Map.GetMapInfo, m)
       local where = type(info) == "table" and type(info.name) == "string" and ns.Usable(info.name) and info.name or nil
-      local who = ns.PartyMembersWithQuest and ns.PartyMembersWithQuest(id) or {}
+      local who = ns.PartyNamesText and ns.PartyNamesText(id) or {}
       local title = LevelTag(id) .. ns.QuestTitle(id)
       local state = (where and L["pick up in %s"]:format(where) or L["not picked up"])
         .. (#who > 0 and (" " .. L["(group: %s)"]:format(table.concat(who, ", "))) or "")
@@ -845,7 +845,7 @@ local function OnZone()
     if ns.InQuestLog(id) then
       inLog = inLog + 1
     elseif ns.ShowAsAvailable(id) then
-      local who = ns.PartyMembersWithQuest and ns.PartyMembersWithQuest(id) or {}
+      local who = ns.PartyNamesText and ns.PartyNamesText(id) or {}
       missing[#missing + 1] = ns.QuestTitle(id) .. (#who > 0 and (" (" .. table.concat(who, ", ") .. ")") or "")
     end
   end
