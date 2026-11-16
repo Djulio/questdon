@@ -1074,6 +1074,30 @@ local function TitleRow(row, e)
   if Game() then return GameRow(row, e) end
   return DonRow(row, e)
 end
+-- Shared by the nearby, zone, level, grey and hidden quest rows.
+function ns.TrackerQuestTooltip(row, e)
+  ns.partyTooltipRow, ns.partyTooltipQuest = row, e
+  if ns.HoverQuestRow then ns.HoverQuestRow(row, e.questID) end
+  local lines = {}
+  for _, o in ipairs(e.objs) do lines[#lines + 1] = (o.done and "|cff66cc73" or "") .. o.text .. (o.done and "|r" or "") end
+  if e.dist then lines[#lines + 1] = { L["Distance"], Yards(e.dist) } end
+  local hint = ns.QuestHint and ns.QuestHint(e.questID)
+  if hint then lines[#lines + 1] = "|cffdcc17f" .. L["Hint"] .. ":|r " .. hint end
+  if ns.PartyQuestTooltipLines then
+    for _, line in ipairs(ns.PartyQuestTooltipLines(e.questID)) do lines[#lines + 1] = line end
+  end
+  return e.title, lines, L["Click: pick it. Shift-click: the game's quest log. Shift-right-click: the quest book."] .. " " .. L["Right-click: abandon or hide."]
+end
+-- Replies can arrive while the mouse stays on the quest row.
+function ns.RefreshPartyQuestTooltip()
+  local row, e = ns.partyTooltipRow, ns.partyTooltipQuest
+  if not (row and e and row.IsShown and row:IsShown() and row.IsMouseOver and row:IsMouseOver()) then return end
+  if not (GameTooltip and ns.Value(GameTooltip.IsOwned, GameTooltip, row) == true) then return end
+  local title, lines, hint = ns.TrackerQuestTooltip(row, e)
+  local panel = row._panel
+  local anchor = row._ttAnchor or (panel and (panel._tooltipAnchor or (panel._opts and panel._opts.tooltipAnchor))) or "auto"
+  Style.Tooltip(row, title, lines, hint, anchor)
+end
 local GAME_GAP = 6
 local function RowFor(e, focusID)
   local row = Style.Row(panel):SetGapBefore(Game() and GAME_GAP or QUEST_GAP)
@@ -1087,13 +1111,7 @@ local function RowFor(e, focusID)
     Pick(e.questID)
   end)
   row:SetTooltip(function()
-    if ns.HoverQuestRow then ns.HoverQuestRow(row, e.questID) end -- (20.10.) its marks on the maps stand out
-    local lines = {}
-    for _, o in ipairs(e.objs) do lines[#lines + 1] = (o.done and "|cff66cc73" or "") .. o.text .. (o.done and "|r" or "") end
-    if e.dist then lines[#lines + 1] = { L["Distance"], Yards(e.dist) } end
-    local hint = ns.QuestHint and ns.QuestHint(e.questID)
-    if hint then lines[#lines + 1] = "|cffdcc17f" .. L["Hint"] .. ":|r " .. hint end
-    return e.title, lines, L["Click: pick it. Shift-click: the game's quest log. Shift-right-click: the quest book."] .. " " .. L["Right-click: abandon or hide."]
+    return ns.TrackerQuestTooltip(row, e)
   end)
   return row
 end
@@ -1790,7 +1808,7 @@ local function Build()
         row:SetMark(MarkRGB(e.questID))
       end
       ns.TrackerItemSpot(row, e.questID)
-      row:SetTooltip(function() if ns.HoverQuestRow then ns.HoverQuestRow(row, e.questID) end end) -- (20.10.) marks stand out on the maps
+      row:SetTooltip(function() return ns.TrackerQuestTooltip(row, e) end)
       row:SetOnClick(function(_, button)
         if ns.TrackerShiftClick(e.questID, button) then return end
         if button == "RightButton" then ShowQuestMenu(e) return end
